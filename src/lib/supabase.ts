@@ -1,0 +1,263 @@
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = 'https://fzjexgxthqlcyraxexvx.supabase.co';
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ6amV4Z3h0aHFsY3lyYXhleHZ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYwNzc2MzMsImV4cCI6MjA4MTY1MzYzM30.qRnKMS773be72hcimqLQnFIrbkKTnOD7f9bK4WIVn8A';
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+export interface User {
+  id: string;
+  email: string;
+  full_name: string;
+  role: 'operator' | 'technician' | 'admin';
+  created_at: string;
+}
+
+export interface Device {
+  id: string;
+  imei: string;
+  brand: string;
+  model: string;
+  entry_date: string;
+  status: 'pending_inspection' | 'inspected' | 'in_service' | 'repaired' | 'completed';
+  created_by: string;
+  created_at: string;
+}
+
+export interface Defect {
+  id: string;
+  device_id: string;
+  defect_type: 'screen' | 'battery' | 'camera' | 'software' | 'speaker' | 'microphone' | 'charging_port' | 'refurbishment' | 'other';
+  description: string;
+  severity: 'low' | 'medium' | 'high';
+  detected_by: string;
+  detected_at: string;
+}
+
+export interface ServiceRequest {
+  id: string;
+  device_id: string;
+  status: 'sent' | 'in_progress' | 'completed';
+  notes: string;
+  service_cost: number;
+  sent_by: string;
+  sent_at: string;
+  completed_at?: string;
+}
+
+class SupabaseDatabase {
+  // Users
+  async getUsers(): Promise<User[]> {
+    const { data, error } = await supabase
+      .from('app_74b74e94ab_users')
+      .select('*')
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      console.error('Error fetching users:', error);
+      return [];
+    }
+    return data || [];
+  }
+
+  async addUser(user: Omit<User, 'id' | 'created_at'>): Promise<User | null> {
+    const { data, error } = await supabase
+      .from('app_74b74e94ab_users')
+      .insert([user])
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Error adding user:', error);
+      return null;
+    }
+    return data;
+  }
+
+  async getUserByEmail(email: string): Promise<User | null> {
+    const { data, error } = await supabase
+      .from('app_74b74e94ab_users')
+      .select('*')
+      .eq('email', email)
+      .single();
+    
+    if (error) {
+      console.error('Error fetching user by email:', error);
+      return null;
+    }
+    return data;
+  }
+
+  // Devices
+  async getDevices(): Promise<Device[]> {
+    const { data, error } = await supabase
+      .from('app_74b74e94ab_devices')
+      .select('*')
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      console.error('Error fetching devices:', error);
+      return [];
+    }
+    return data || [];
+  }
+
+  async addDevice(device: Omit<Device, 'id' | 'created_at'>): Promise<Device | null> {
+    const { data, error } = await supabase
+      .from('app_74b74e94ab_devices')
+      .insert([device])
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Error adding device:', error);
+      return null;
+    }
+    return data;
+  }
+
+  async updateDevice(id: string, updates: Partial<Device>): Promise<Device | null> {
+    const { data, error } = await supabase
+      .from('app_74b74e94ab_devices')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Error updating device:', error);
+      return null;
+    }
+    return data;
+  }
+
+  async getDeviceById(id: string): Promise<Device | null> {
+    const { data, error } = await supabase
+      .from('app_74b74e94ab_devices')
+      .select('*')
+      .eq('id', id)
+      .single();
+    
+    if (error) {
+      console.error('Error fetching device by id:', error);
+      return null;
+    }
+    return data;
+  }
+
+  // Defects
+  async getDefects(): Promise<Defect[]> {
+    const { data, error } = await supabase
+      .from('app_74b74e94ab_defects')
+      .select('*')
+      .order('detected_at', { ascending: false });
+    
+    if (error) {
+      console.error('Error fetching defects:', error);
+      return [];
+    }
+    return data || [];
+  }
+
+  async addDefect(defect: Omit<Defect, 'id' | 'detected_at'>): Promise<Defect | null> {
+    const { data, error } = await supabase
+      .from('app_74b74e94ab_defects')
+      .insert([defect])
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Error adding defect:', error);
+      return null;
+    }
+    return data;
+  }
+
+  async deleteDefect(id: string): Promise<boolean> {
+    const { error } = await supabase
+      .from('app_74b74e94ab_defects')
+      .delete()
+      .eq('id', id);
+    
+    if (error) {
+      console.error('Error deleting defect:', error);
+      return false;
+    }
+    return true;
+  }
+
+  async getDefectsByDevice(deviceId: string): Promise<Defect[]> {
+    const { data, error } = await supabase
+      .from('app_74b74e94ab_defects')
+      .select('*')
+      .eq('device_id', deviceId)
+      .order('detected_at', { ascending: false });
+    
+    if (error) {
+      console.error('Error fetching defects by device:', error);
+      return [];
+    }
+    return data || [];
+  }
+
+  // Service Requests
+  async getServiceRequests(): Promise<ServiceRequest[]> {
+    const { data, error } = await supabase
+      .from('app_74b74e94ab_service_requests')
+      .select('*')
+      .order('sent_at', { ascending: false });
+    
+    if (error) {
+      console.error('Error fetching service requests:', error);
+      return [];
+    }
+    return data || [];
+  }
+
+  async addServiceRequest(request: Omit<ServiceRequest, 'id' | 'sent_at'>): Promise<ServiceRequest | null> {
+    const { data, error } = await supabase
+      .from('app_74b74e94ab_service_requests')
+      .insert([request])
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Error adding service request:', error);
+      return null;
+    }
+    return data;
+  }
+
+  async updateServiceRequest(id: string, updates: Partial<ServiceRequest>): Promise<ServiceRequest | null> {
+    const { data, error } = await supabase
+      .from('app_74b74e94ab_service_requests')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Error updating service request:', error);
+      return null;
+    }
+    return data;
+  }
+
+  async getServiceRequestByDevice(deviceId: string): Promise<ServiceRequest | null> {
+    const { data, error } = await supabase
+      .from('app_74b74e94ab_service_requests')
+      .select('*')
+      .eq('device_id', deviceId)
+      .order('sent_at', { ascending: false })
+      .limit(1)
+      .single();
+    
+    if (error) {
+      console.error('Error fetching service request by device:', error);
+      return null;
+    }
+    return data;
+  }
+}
+
+export const db = new SupabaseDatabase();
