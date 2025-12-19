@@ -6,8 +6,9 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { useInspectionQueue } from '@/contexts/InspectionQueueContext';
-import { Printer, CheckCircle, XCircle, ListOrdered, ArrowRight } from 'lucide-react';
+import { Printer, CheckCircle, XCircle, ListOrdered, Smartphone } from 'lucide-react';
 import QRCode from 'qrcode';
 import { toast } from 'sonner';
 
@@ -24,7 +25,8 @@ interface InspectionData {
 }
 
 export default function InitialInspection() {
-  const { queue, removeFromQueue, getNextInQueue } = useInspectionQueue();
+  const { queue, removeFromQueue } = useInspectionQueue();
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
   const [formData, setFormData] = useState<InspectionData>({
     screenBroken: '',
     cameraDefect: '',
@@ -37,27 +39,33 @@ export default function InitialInspection() {
     model: ''
   });
 
-  // Kuyruktan ilk cihazı otomatik olarak yükle
+  // İlk cihazı otomatik seç
   useEffect(() => {
-    const nextItem = getNextInQueue();
-    if (nextItem && !formData.imei) {
-      setFormData(prev => ({
-        ...prev,
-        brand: nextItem.brand,
-        model: nextItem.model,
-        imei: nextItem.imei
-      }));
+    if (queue.length > 0 && !selectedDeviceId) {
+      setSelectedDeviceId(queue[0].id);
     }
-  }, [queue]);
+  }, [queue, selectedDeviceId]);
 
-  const loadNextDevice = () => {
-    const currentItem = getNextInQueue();
-    if (currentItem) {
-      removeFromQueue(currentItem.id);
+  // Seçili cihaz değiştiğinde formu güncelle
+  useEffect(() => {
+    if (selectedDeviceId) {
+      const selectedDevice = queue.find(item => item.id === selectedDeviceId);
+      if (selectedDevice) {
+        setFormData(prev => ({
+          ...prev,
+          brand: selectedDevice.brand,
+          model: selectedDevice.model,
+          imei: selectedDevice.imei
+        }));
+      }
     }
+  }, [selectedDeviceId, queue]);
 
-    const nextItem = getNextInQueue();
-    if (nextItem) {
+  const handleDeviceSelect = (deviceId: string) => {
+    setSelectedDeviceId(deviceId);
+    // Kontrol verilerini sıfırla ama cihaz bilgilerini koru
+    const selectedDevice = queue.find(item => item.id === deviceId);
+    if (selectedDevice) {
       setFormData({
         screenBroken: '',
         cameraDefect: '',
@@ -65,25 +73,10 @@ export default function InitialInspection() {
         backCoverBroken: '',
         bodyDamage: '',
         batteryLevel: '',
-        brand: nextItem.brand,
-        model: nextItem.model,
-        imei: nextItem.imei
+        brand: selectedDevice.brand,
+        model: selectedDevice.model,
+        imei: selectedDevice.imei
       });
-      toast.success(`Sıradaki cihaz yüklendi: ${nextItem.brand} ${nextItem.model}`);
-    } else {
-      // Kuyruk boş, formu temizle
-      setFormData({
-        screenBroken: '',
-        cameraDefect: '',
-        soundDefect: '',
-        backCoverBroken: '',
-        bodyDamage: '',
-        batteryLevel: '',
-        imei: '',
-        brand: '',
-        model: ''
-      });
-      toast.info('Kuyrukta başka cihaz yok');
     }
   };
 
@@ -399,24 +392,34 @@ export default function InitialInspection() {
 
       toast.success('İlk kontrol raporu yazdırılıyor!');
 
-      // Kuyrukta başka cihaz varsa otomatik yükle
-      if (queue.length > 0) {
-        setTimeout(() => {
-          loadNextDevice();
-        }, 1000);
-      } else {
-        // Kuyruk boşsa formu temizle
-        setFormData({
-          screenBroken: '',
-          cameraDefect: '',
-          soundDefect: '',
-          backCoverBroken: '',
-          bodyDamage: '',
-          batteryLevel: '',
-          imei: '',
-          brand: '',
-          model: ''
-        });
+      // Tamamlanan cihazı kuyruktan çıkar
+      if (selectedDeviceId) {
+        removeFromQueue(selectedDeviceId);
+        
+        // Kuyrukta başka cihaz varsa ilkini seç
+        if (queue.length > 1) {
+          const remainingDevices = queue.filter(item => item.id !== selectedDeviceId);
+          if (remainingDevices.length > 0) {
+            setTimeout(() => {
+              setSelectedDeviceId(remainingDevices[0].id);
+              toast.success(`Sıradaki cihaz yüklendi: ${remainingDevices[0].brand} ${remainingDevices[0].model}`);
+            }, 1000);
+          }
+        } else {
+          // Kuyruk boş, formu temizle
+          setSelectedDeviceId(null);
+          setFormData({
+            screenBroken: '',
+            cameraDefect: '',
+            soundDefect: '',
+            backCoverBroken: '',
+            bodyDamage: '',
+            batteryLevel: '',
+            imei: '',
+            brand: '',
+            model: ''
+          });
+        }
       }
     } catch (error) {
       console.error('QR kod oluşturma hatası:', error);
@@ -440,241 +443,261 @@ export default function InitialInspection() {
             <p className="text-gray-600 mt-1">Cihazın ilk fiziksel kontrolünü yapın ve rapor yazdırın</p>
           </div>
           {queue.length > 0 && (
-            <div className="flex items-center gap-3">
-              <Badge variant="secondary" className="text-lg px-4 py-2">
-                <ListOrdered className="w-5 h-5 mr-2" />
-                Kuyrukta: {queue.length} cihaz
-              </Badge>
-              {queue.length > 1 && (
-                <Button variant="outline" onClick={loadNextDevice}>
-                  <ArrowRight className="w-4 h-4 mr-2" />
-                  Sonraki Cihaz
-                </Button>
-              )}
-            </div>
+            <Badge variant="secondary" className="text-lg px-4 py-2">
+              <ListOrdered className="w-5 h-5 mr-2" />
+              Kuyrukta: {queue.length} cihaz
+            </Badge>
           )}
         </div>
 
-        {queue.length > 1 && (
-          <Card className="bg-blue-50 border-blue-200">
-            <CardContent className="pt-6">
-              <div className="flex items-start gap-3">
-                <ListOrdered className="w-5 h-5 text-blue-600 mt-0.5" />
-                <div>
-                  <h3 className="font-semibold text-blue-900 mb-2">Sıradaki Cihazlar:</h3>
-                  <div className="space-y-1">
-                    {queue.slice(1, 4).map((item, index) => (
-                      <p key={item.id} className="text-sm text-blue-700">
-                        {index + 2}. {item.brand} {item.model} - {item.imei}
-                      </p>
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          {/* Sol Panel - Cihaz Listesi */}
+          {queue.length > 0 && (
+            <Card className="lg:col-span-1">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Smartphone className="w-5 h-5" />
+                  Bekleyen Cihazlar
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ScrollArea className="h-[600px] pr-4">
+                  <div className="space-y-2">
+                    {queue.map((device, index) => (
+                      <button
+                        key={device.id}
+                        onClick={() => handleDeviceSelect(device.id)}
+                        className={`w-full text-left p-3 rounded-lg border-2 transition-all ${
+                          selectedDeviceId === device.id
+                            ? 'border-blue-500 bg-blue-50 shadow-md'
+                            : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between mb-2">
+                          <Badge variant={selectedDeviceId === device.id ? 'default' : 'secondary'} className="text-xs">
+                            #{index + 1}
+                          </Badge>
+                          {selectedDeviceId === device.id && (
+                            <CheckCircle className="w-4 h-4 text-blue-500" />
+                          )}
+                        </div>
+                        <div className="space-y-1">
+                          <p className="font-semibold text-sm text-gray-900">{device.brand}</p>
+                          <p className="text-sm text-gray-600">{device.model}</p>
+                          <p className="text-xs font-mono text-gray-500 break-all">{device.imei}</p>
+                        </div>
+                      </button>
                     ))}
-                    {queue.length > 4 && (
-                      <p className="text-sm text-blue-600 font-medium">+ {queue.length - 4} cihaz daha...</p>
-                    )}
                   </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+                </ScrollArea>
+              </CardContent>
+            </Card>
+          )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Cihaz Bilgileri</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="brand">Marka</Label>
-                <Input
-                  id="brand"
-                  placeholder="Apple, Samsung, Xiaomi..."
-                  value={formData.brand}
-                  onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
-                />
-              </div>
+          {/* Sağ Panel - Form */}
+          <div className={queue.length > 0 ? 'lg:col-span-3 space-y-6' : 'lg:col-span-4 space-y-6'}>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Cihaz Bilgileri</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="brand">Marka</Label>
+                    <Input
+                      id="brand"
+                      placeholder="Apple, Samsung, Xiaomi..."
+                      value={formData.brand}
+                      onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
+                      disabled={queue.length > 0}
+                    />
+                  </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="model">Model</Label>
-                <Input
-                  id="model"
-                  placeholder="iPhone 13, Galaxy S21..."
-                  value={formData.model}
-                  onChange={(e) => setFormData({ ...formData, model: e.target.value })}
-                />
-              </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="model">Model</Label>
+                    <Input
+                      id="model"
+                      placeholder="iPhone 13, Galaxy S21..."
+                      value={formData.model}
+                      onChange={(e) => setFormData({ ...formData, model: e.target.value })}
+                      disabled={queue.length > 0}
+                    />
+                  </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="imei">IMEI</Label>
-                <Input
-                  id="imei"
-                  placeholder="123456789012345"
-                  value={formData.imei}
-                  onChange={(e) => setFormData({ ...formData, imei: e.target.value })}
-                />
-              </div>
-            </CardContent>
-          </Card>
+                  <div className="space-y-2">
+                    <Label htmlFor="imei">IMEI</Label>
+                    <Input
+                      id="imei"
+                      placeholder="123456789012345"
+                      value={formData.imei}
+                      onChange={(e) => setFormData({ ...formData, imei: e.target.value })}
+                      disabled={queue.length > 0}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Fiziksel Kontrol</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-3">
-                <Label>Ekran Kırık mı?</Label>
-                <RadioGroup
-                  value={formData.screenBroken}
-                  onValueChange={(value: 'yes' | 'no') => setFormData({ ...formData, screenBroken: value })}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Fiziksel Kontrol</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="space-y-3">
+                    <Label>Ekran Kırık mı?</Label>
+                    <RadioGroup
+                      value={formData.screenBroken}
+                      onValueChange={(value: 'yes' | 'no') => setFormData({ ...formData, screenBroken: value })}
+                    >
+                      <div className="flex items-center space-x-6">
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="yes" id="screen-yes" />
+                          <Label htmlFor="screen-yes" className="flex items-center gap-2 cursor-pointer">
+                            <XCircle className="w-4 h-4 text-red-500" />
+                            Evet
+                          </Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="no" id="screen-no" />
+                          <Label htmlFor="screen-no" className="flex items-center gap-2 cursor-pointer">
+                            <CheckCircle className="w-4 h-4 text-green-500" />
+                            Hayır
+                          </Label>
+                        </div>
+                      </div>
+                    </RadioGroup>
+                  </div>
+
+                  <div className="space-y-3">
+                    <Label>Kamera Arızası var mı?</Label>
+                    <RadioGroup
+                      value={formData.cameraDefect}
+                      onValueChange={(value: 'yes' | 'no') => setFormData({ ...formData, cameraDefect: value })}
+                    >
+                      <div className="flex items-center space-x-6">
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="yes" id="camera-yes" />
+                          <Label htmlFor="camera-yes" className="flex items-center gap-2 cursor-pointer">
+                            <XCircle className="w-4 h-4 text-red-500" />
+                            Evet
+                          </Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="no" id="camera-no" />
+                          <Label htmlFor="camera-no" className="flex items-center gap-2 cursor-pointer">
+                            <CheckCircle className="w-4 h-4 text-green-500" />
+                            Hayır
+                          </Label>
+                        </div>
+                      </div>
+                    </RadioGroup>
+                  </div>
+
+                  <div className="space-y-3">
+                    <Label>Ses Arızası var mı?</Label>
+                    <RadioGroup
+                      value={formData.soundDefect}
+                      onValueChange={(value: 'yes' | 'no') => setFormData({ ...formData, soundDefect: value })}
+                    >
+                      <div className="flex items-center space-x-6">
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="yes" id="sound-yes" />
+                          <Label htmlFor="sound-yes" className="flex items-center gap-2 cursor-pointer">
+                            <XCircle className="w-4 h-4 text-red-500" />
+                            Evet
+                          </Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="no" id="sound-no" />
+                          <Label htmlFor="sound-no" className="flex items-center gap-2 cursor-pointer">
+                            <CheckCircle className="w-4 h-4 text-green-500" />
+                            Hayır
+                          </Label>
+                        </div>
+                      </div>
+                    </RadioGroup>
+                  </div>
+
+                  <div className="space-y-3">
+                    <Label>Arka Kapak Kırık mı?</Label>
+                    <RadioGroup
+                      value={formData.backCoverBroken}
+                      onValueChange={(value: 'yes' | 'no') => setFormData({ ...formData, backCoverBroken: value })}
+                    >
+                      <div className="flex items-center space-x-6">
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="yes" id="back-yes" />
+                          <Label htmlFor="back-yes" className="flex items-center gap-2 cursor-pointer">
+                            <XCircle className="w-4 h-4 text-red-500" />
+                            Evet
+                          </Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="no" id="back-no" />
+                          <Label htmlFor="back-no" className="flex items-center gap-2 cursor-pointer">
+                            <CheckCircle className="w-4 h-4 text-green-500" />
+                            Hayır
+                          </Label>
+                        </div>
+                      </div>
+                    </RadioGroup>
+                  </div>
+
+                  <div className="space-y-3">
+                    <Label>Kasada Darbe var mı?</Label>
+                    <RadioGroup
+                      value={formData.bodyDamage}
+                      onValueChange={(value: 'yes' | 'no') => setFormData({ ...formData, bodyDamage: value })}
+                    >
+                      <div className="flex items-center space-x-6">
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="yes" id="body-yes" />
+                          <Label htmlFor="body-yes" className="flex items-center gap-2 cursor-pointer">
+                            <XCircle className="w-4 h-4 text-red-500" />
+                            Evet
+                          </Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="no" id="body-no" />
+                          <Label htmlFor="body-no" className="flex items-center gap-2 cursor-pointer">
+                            <CheckCircle className="w-4 h-4 text-green-500" />
+                            Hayır
+                          </Label>
+                        </div>
+                      </div>
+                    </RadioGroup>
+                  </div>
+
+                  <div className="space-y-2 pt-4 border-t">
+                    <Label htmlFor="battery">Pil Seviyesi (%)</Label>
+                    <Input
+                      id="battery"
+                      type="number"
+                      min="0"
+                      max="100"
+                      placeholder="0-100 arası bir değer girin"
+                      value={formData.batteryLevel}
+                      onChange={(e) => setFormData({ ...formData, batteryLevel: e.target.value })}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            <Card>
+              <CardContent className="pt-6">
+                <Button
+                  onClick={handlePrint}
+                  disabled={!isFormValid()}
+                  className="w-full h-14 text-lg"
                 >
-                  <div className="flex items-center space-x-6">
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="yes" id="screen-yes" />
-                      <Label htmlFor="screen-yes" className="flex items-center gap-2 cursor-pointer">
-                        <XCircle className="w-4 h-4 text-red-500" />
-                        Evet
-                      </Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="no" id="screen-no" />
-                      <Label htmlFor="screen-no" className="flex items-center gap-2 cursor-pointer">
-                        <CheckCircle className="w-4 h-4 text-green-500" />
-                        Hayır
-                      </Label>
-                    </div>
-                  </div>
-                </RadioGroup>
-              </div>
-
-              <div className="space-y-3">
-                <Label>Kamera Arızası var mı?</Label>
-                <RadioGroup
-                  value={formData.cameraDefect}
-                  onValueChange={(value: 'yes' | 'no') => setFormData({ ...formData, cameraDefect: value })}
-                >
-                  <div className="flex items-center space-x-6">
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="yes" id="camera-yes" />
-                      <Label htmlFor="camera-yes" className="flex items-center gap-2 cursor-pointer">
-                        <XCircle className="w-4 h-4 text-red-500" />
-                        Evet
-                      </Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="no" id="camera-no" />
-                      <Label htmlFor="camera-no" className="flex items-center gap-2 cursor-pointer">
-                        <CheckCircle className="w-4 h-4 text-green-500" />
-                        Hayır
-                      </Label>
-                    </div>
-                  </div>
-                </RadioGroup>
-              </div>
-
-              <div className="space-y-3">
-                <Label>Ses Arızası var mı?</Label>
-                <RadioGroup
-                  value={formData.soundDefect}
-                  onValueChange={(value: 'yes' | 'no') => setFormData({ ...formData, soundDefect: value })}
-                >
-                  <div className="flex items-center space-x-6">
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="yes" id="sound-yes" />
-                      <Label htmlFor="sound-yes" className="flex items-center gap-2 cursor-pointer">
-                        <XCircle className="w-4 h-4 text-red-500" />
-                        Evet
-                      </Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="no" id="sound-no" />
-                      <Label htmlFor="sound-no" className="flex items-center gap-2 cursor-pointer">
-                        <CheckCircle className="w-4 h-4 text-green-500" />
-                        Hayır
-                      </Label>
-                    </div>
-                  </div>
-                </RadioGroup>
-              </div>
-
-              <div className="space-y-3">
-                <Label>Arka Kapak Kırık mı?</Label>
-                <RadioGroup
-                  value={formData.backCoverBroken}
-                  onValueChange={(value: 'yes' | 'no') => setFormData({ ...formData, backCoverBroken: value })}
-                >
-                  <div className="flex items-center space-x-6">
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="yes" id="back-yes" />
-                      <Label htmlFor="back-yes" className="flex items-center gap-2 cursor-pointer">
-                        <XCircle className="w-4 h-4 text-red-500" />
-                        Evet
-                      </Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="no" id="back-no" />
-                      <Label htmlFor="back-no" className="flex items-center gap-2 cursor-pointer">
-                        <CheckCircle className="w-4 h-4 text-green-500" />
-                        Hayır
-                      </Label>
-                    </div>
-                  </div>
-                </RadioGroup>
-              </div>
-
-              <div className="space-y-3">
-                <Label>Kasada Darbe var mı?</Label>
-                <RadioGroup
-                  value={formData.bodyDamage}
-                  onValueChange={(value: 'yes' | 'no') => setFormData({ ...formData, bodyDamage: value })}
-                >
-                  <div className="flex items-center space-x-6">
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="yes" id="body-yes" />
-                      <Label htmlFor="body-yes" className="flex items-center gap-2 cursor-pointer">
-                        <XCircle className="w-4 h-4 text-red-500" />
-                        Evet
-                      </Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="no" id="body-no" />
-                      <Label htmlFor="body-no" className="flex items-center gap-2 cursor-pointer">
-                        <CheckCircle className="w-4 h-4 text-green-500" />
-                        Hayır
-                      </Label>
-                    </div>
-                  </div>
-                </RadioGroup>
-              </div>
-
-              <div className="space-y-2 pt-4 border-t">
-                <Label htmlFor="battery">Pil Seviyesi (%)</Label>
-                <Input
-                  id="battery"
-                  type="number"
-                  min="0"
-                  max="100"
-                  placeholder="0-100 arası bir değer girin"
-                  value={formData.batteryLevel}
-                  onChange={(e) => setFormData({ ...formData, batteryLevel: e.target.value })}
-                />
-              </div>
-            </CardContent>
-          </Card>
+                  <Printer className="w-5 h-5 mr-2" />
+                  QR Kod ile Rapor Yazdır
+                  {queue.length > 0 && <span className="ml-2 text-sm">({queue.length} kuyrukta)</span>}
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
         </div>
-
-        <Card>
-          <CardContent className="pt-6">
-            <Button
-              onClick={handlePrint}
-              disabled={!isFormValid()}
-              className="w-full h-14 text-lg"
-            >
-              <Printer className="w-5 h-5 mr-2" />
-              QR Kod ile Rapor Yazdır
-              {queue.length > 0 && <span className="ml-2 text-sm">({queue.length} kuyrukta)</span>}
-            </Button>
-          </CardContent>
-        </Card>
       </div>
     </DashboardLayout>
   );
