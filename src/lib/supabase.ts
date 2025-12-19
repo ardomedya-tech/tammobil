@@ -193,6 +193,17 @@ export const db = {
     return data || [];
   },
 
+  async getDefectsByDevice(deviceId: string): Promise<Defect[]> {
+    const { data, error } = await supabase
+      .from('app_74b74e94ab_defects')
+      .select('*')
+      .eq('device_id', deviceId)
+      .order('detected_at', { ascending: false });
+    
+    if (error) throw error;
+    return data || [];
+  },
+
   async addDefect(defect: Omit<Defect, 'id' | 'detected_at'>): Promise<Defect> {
     const { data, error } = await supabase
       .from('app_74b74e94ab_defects')
@@ -222,6 +233,19 @@ export const db = {
     
     if (error) throw error;
     return data || [];
+  },
+
+  async getServiceRequestByDevice(deviceId: string): Promise<ServiceRequest | null> {
+    const { data, error } = await supabase
+      .from('app_74b74e94ab_service_requests')
+      .select('*')
+      .eq('device_id', deviceId)
+      .order('sent_at', { ascending: false })
+      .limit(1)
+      .single();
+    
+    if (error && error.code !== 'PGRST116') throw error;
+    return data;
   },
 
   async addServiceRequest(request: Omit<ServiceRequest, 'id' | 'sent_at'>): Promise<ServiceRequest> {
