@@ -6,12 +6,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Badge } from '@/components/ui/badge';
 import { DefectPrintReport } from '@/components/DefectPrintReport';
-import { db, Defect, Device, InitialInspection } from '@/lib/supabase';
+import { db, Defect, Device } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
-import { AlertCircle, Trash2, ClipboardCheck, XCircle, CheckCircle, Battery } from 'lucide-react';
+import { AlertCircle, Trash2 } from 'lucide-react';
 
 const defectTypes = [
   { value: 'screen', label: 'Ekran' },
@@ -43,7 +42,6 @@ export default function Defects() {
   const [severity, setSeverity] = useState<SeverityType>('medium');
   const [selectedTechnician, setSelectedTechnician] = useState('');
   const [deviceDefects, setDeviceDefects] = useState<Defect[]>([]);
-  const [initialInspection, setInitialInspection] = useState<InitialInspection | null>(null);
   const [loading, setLoading] = useState(true);
 
   const loadData = async () => {
@@ -62,27 +60,12 @@ export default function Defects() {
     }
   };
 
-  const loadInitialInspection = async (deviceId: string) => {
-    if (deviceId) {
-      try {
-        const inspection = await db.getInitialInspectionByDeviceId(deviceId);
-        setInitialInspection(inspection);
-      } catch (error) {
-        console.error('İlk kontrol verileri yüklenemedi:', error);
-        setInitialInspection(null);
-      }
-    } else {
-      setInitialInspection(null);
-    }
-  };
-
   useEffect(() => {
     loadData();
   }, []);
 
   useEffect(() => {
     loadDeviceDefects(selectedDevice);
-    loadInitialInspection(selectedDevice);
   }, [selectedDevice]);
 
   const handleDefectToggle = (defectType: string) => {
@@ -168,117 +151,9 @@ export default function Defects() {
           <p className="text-gray-600 mt-1">Cihazlardaki arızaları tespit edin ve kaydedin</p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Sol Panel - İlk Kontrol Bilgileri */}
-          {selectedDevice && initialInspection && (
-            <Card className="lg:col-span-1">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <ClipboardCheck className="w-5 h-5" />
-                  İlk Kontrol Sonuçları
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <span className="text-sm font-medium text-gray-700">Ekran Kırık mı?</span>
-                    {initialInspection.screen_broken ? (
-                      <Badge variant="destructive" className="flex items-center gap-1">
-                        <XCircle className="w-3 h-3" />
-                        Evet
-                      </Badge>
-                    ) : (
-                      <Badge variant="secondary" className="bg-green-100 text-green-800 flex items-center gap-1">
-                        <CheckCircle className="w-3 h-3" />
-                        Hayır
-                      </Badge>
-                    )}
-                  </div>
-
-                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <span className="text-sm font-medium text-gray-700">Kamera Arızası</span>
-                    {initialInspection.camera_defect ? (
-                      <Badge variant="destructive" className="flex items-center gap-1">
-                        <XCircle className="w-3 h-3" />
-                        Evet
-                      </Badge>
-                    ) : (
-                      <Badge variant="secondary" className="bg-green-100 text-green-800 flex items-center gap-1">
-                        <CheckCircle className="w-3 h-3" />
-                        Hayır
-                      </Badge>
-                    )}
-                  </div>
-
-                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <span className="text-sm font-medium text-gray-700">Ses Arızası</span>
-                    {initialInspection.sound_defect ? (
-                      <Badge variant="destructive" className="flex items-center gap-1">
-                        <XCircle className="w-3 h-3" />
-                        Evet
-                      </Badge>
-                    ) : (
-                      <Badge variant="secondary" className="bg-green-100 text-green-800 flex items-center gap-1">
-                        <CheckCircle className="w-3 h-3" />
-                        Hayır
-                      </Badge>
-                    )}
-                  </div>
-
-                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <span className="text-sm font-medium text-gray-700">Arka Kapak Kırık</span>
-                    {initialInspection.back_cover_broken ? (
-                      <Badge variant="destructive" className="flex items-center gap-1">
-                        <XCircle className="w-3 h-3" />
-                        Evet
-                      </Badge>
-                    ) : (
-                      <Badge variant="secondary" className="bg-green-100 text-green-800 flex items-center gap-1">
-                        <CheckCircle className="w-3 h-3" />
-                        Hayır
-                      </Badge>
-                    )}
-                  </div>
-
-                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <span className="text-sm font-medium text-gray-700">Kasada Darbe</span>
-                    {initialInspection.body_damage ? (
-                      <Badge variant="destructive" className="flex items-center gap-1">
-                        <XCircle className="w-3 h-3" />
-                        Evet
-                      </Badge>
-                    ) : (
-                      <Badge variant="secondary" className="bg-green-100 text-green-800 flex items-center gap-1">
-                        <CheckCircle className="w-3 h-3" />
-                        Hayır
-                      </Badge>
-                    )}
-                  </div>
-
-                  <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Battery className="w-5 h-5 text-blue-600" />
-                        <span className="text-sm font-medium text-blue-900">Pil Seviyesi</span>
-                      </div>
-                      <Badge variant="secondary" className="bg-blue-100 text-blue-800 text-lg px-3 py-1">
-                        %{initialInspection.battery_level}
-                      </Badge>
-                    </div>
-                  </div>
-
-                  <div className="pt-3 border-t">
-                    <p className="text-xs text-gray-500">
-                      Kontrol Tarihi: {new Date(initialInspection.inspected_at).toLocaleString('tr-TR')}
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Orta Panel - Yeni Arıza Kaydı */}
-          <Card className={selectedDevice && initialInspection ? 'lg:col-span-1' : 'lg:col-span-2'}>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Sol Panel - Yeni Arıza Kaydı */}
+          <Card>
             <CardHeader>
               <CardTitle>Yeni Arıza Kaydı</CardTitle>
             </CardHeader>
@@ -380,7 +255,7 @@ export default function Defects() {
           </Card>
 
           {/* Sağ Panel - Tespit Edilen Arızalar */}
-          <Card className="lg:col-span-1">
+          <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle>Tespit Edilen Arızalar</CardTitle>
