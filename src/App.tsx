@@ -7,6 +7,7 @@ import { ProtectedRoute } from '@/components/ProtectedRoute';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 import Dashboard from './pages/Dashboard';
+import InitialInspection from './pages/InitialInspection';
 import Devices from './pages/Devices';
 import DeviceStock from './pages/DeviceStock';
 import Defects from './pages/Defects';
@@ -32,6 +33,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <Dashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/initial-inspection"
+              element={
+                <ProtectedRoute>
+                  <InitialInspection />
                 </ProtectedRoute>
               }
             />

@@ -11,6 +11,7 @@ import {
   ShoppingCart,
   DollarSign,
   Package,
+  ClipboardCheck,
   LogOut
 } from 'lucide-react';
 
@@ -30,6 +31,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
 
   const menuItems = [
     { path: '/dashboard', icon: LayoutDashboard, label: 'Ana Sayfa' },
+    { path: '/initial-inspection', icon: ClipboardCheck, label: 'İlk Kontrol' },
     { path: '/devices', icon: Smartphone, label: 'Cihazlar' },
     { path: '/device-stock', icon: Package, label: 'Cihaz Stok' },
     { path: '/defects', icon: AlertCircle, label: 'Arıza Tespiti' },
