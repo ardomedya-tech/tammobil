@@ -1,12 +1,14 @@
-import { Device, Defect } from '@/lib/supabase';
+import { Device, Defect, db } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Printer } from 'lucide-react';
 import QRCode from 'qrcode';
 import { toast } from 'sonner';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface DefectPrintReportProps {
   device: Device;
   defects: Defect[];
+  onServiceRequestCreated?: () => void;
 }
 
 const defectTypeLabels: Record<string, string> = {
@@ -27,7 +29,9 @@ const severityLabels: Record<string, string> = {
   high: 'Yüksek'
 };
 
-export const DefectPrintReport = ({ device, defects }: DefectPrintReportProps) => {
+export const DefectPrintReport = ({ device, defects, onServiceRequestCreated }: DefectPrintReportProps) => {
+  const { user } = useAuth();
+
   const handlePrint = async () => {
     try {
       // QR kod içeriği: IMEI + Marka + Model + Arızalar
@@ -265,7 +269,39 @@ export const DefectPrintReport = ({ device, defects }: DefectPrintReportProps) =
         }, 500);
       };
 
-      toast.success('Barkod yazdırma hazırlandı!');
+      // Otomatik olarak teknik servis talebi oluştur
+      try {
+        // Önce bu cihaz için zaten bir servis talebi var mı kontrol et
+        const existingRequest = await db.getServiceRequestByDevice(device.id);
+        
+        if (!existingRequest) {
+          // Yeni servis talebi oluştur
+          const newServiceRequest = {
+            device_id: device.id,
+            status: 'sent' as const,
+            service_cost: 0,
+            sent_by: user?.id || '',
+            notes: `Arıza tespiti tamamlandı. Tespit edilen arızalar: ${defects.map(d => defectTypeLabels[d.defect_type]).join(', ')}`
+          };
+
+          await db.addServiceRequest(newServiceRequest);
+          
+          // Cihaz durumunu güncelle
+          await db.updateDevice(device.id, { status: 'in_service' });
+          
+          toast.success('Barkod yazdırıldı ve teknik servis talebi oluşturuldu!');
+          
+          // Callback çağır (eğer varsa)
+          if (onServiceRequestCreated) {
+            onServiceRequestCreated();
+          }
+        } else {
+          toast.success('Barkod yazdırma hazırlandı!');
+        }
+      } catch (error) {
+        console.error('Servis talebi oluşturma hatası:', error);
+        toast.warning('Barkod yazdırıldı ancak servis talebi oluşturulamadı!');
+      }
     } catch (error) {
       console.error('QR kod oluşturma hatası:', error);
       toast.error('QR kod oluşturulurken bir hata oluştu!');

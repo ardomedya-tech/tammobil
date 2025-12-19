@@ -61,9 +61,9 @@ export default function DeviceStockPage() {
     }
   };
 
-  const handleSendToService = async (stockItem: DeviceStock) => {
+  const handleSendToDefectInspection = async (stockItem: DeviceStock) => {
     try {
-      // Create new device from stock
+      // Stoktan cihazı arıza tespitine gönder (pending_inspection durumunda)
       const newDevice: Omit<Device, 'id' | 'created_at'> = {
         imei: stockItem.imei,
         brand: stockItem.brand,
@@ -75,20 +75,14 @@ export default function DeviceStockPage() {
 
       await db.addDevice(newDevice);
 
-      // Decrease stock quantity or delete if quantity is 1
-      if (stockItem.stock_quantity > 1) {
-        await db.updateDeviceStock(stockItem.id, {
-          stock_quantity: stockItem.stock_quantity - 1
-        });
-      } else {
-        await db.deleteDeviceStock(stockItem.id);
-      }
-
+      // STOK SİLİNMESİN - Sadece bilgilendirme mesajı
+      toast.success(`${stockItem.brand} ${stockItem.model} arıza tespitine gönderildi! Stok korundu.`);
+      
+      // Sayfayı yenile
       await loadStock();
-      toast.success(`${stockItem.brand} ${stockItem.model} servise gönderildi!`);
     } catch (error) {
-      toast.error('Servise gönderilirken bir hata oluştu!');
-      console.error('Send to service error:', error);
+      toast.error('Arıza tespitine gönderilirken bir hata oluştu!');
+      console.error('Send to defect inspection error:', error);
     }
   };
 
@@ -286,10 +280,10 @@ export default function DeviceStockPage() {
                           <Button
                             variant="default"
                             size="sm"
-                            onClick={() => handleSendToService(item)}
+                            onClick={() => handleSendToDefectInspection(item)}
                           >
                             <Send className="w-4 h-4 mr-1" />
-                            Servise Gönder
+                            Arıza Tespitine Gönder
                           </Button>
                           <AlertDialog>
                             <AlertDialogTrigger asChild>

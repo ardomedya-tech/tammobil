@@ -24,6 +24,13 @@ const defectTypes = [
   { value: 'other', label: 'Diğer' }
 ];
 
+const technicians = [
+  { value: 'nevzat', label: 'Nevzat' },
+  { value: 'mustafa', label: 'Mustafa' },
+  { value: 'hasan', label: 'Hasan' },
+  { value: 'can', label: 'Can' }
+];
+
 type DefectType = 'screen' | 'battery' | 'camera' | 'software' | 'speaker' | 'microphone' | 'charging_port' | 'refurbishment' | 'other';
 type SeverityType = 'low' | 'medium' | 'high';
 
@@ -34,6 +41,7 @@ export default function Defects() {
   const [selectedDefects, setSelectedDefects] = useState<string[]>([]);
   const [description, setDescription] = useState('');
   const [severity, setSeverity] = useState<SeverityType>('medium');
+  const [selectedTechnician, setSelectedTechnician] = useState('');
   const [deviceDefects, setDeviceDefects] = useState<Defect[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -82,11 +90,19 @@ export default function Defects() {
       return;
     }
 
+    if (!selectedTechnician) {
+      toast.error('Lütfen bir teknik servis personeli seçin');
+      return;
+    }
+
+    // Arıza açıklamasına teknisyen bilgisini ekle
+    const descriptionWithTechnician = `${description ? description + ' | ' : ''}Teknisyen: ${technicians.find(t => t.value === selectedTechnician)?.label}`;
+
     for (const defectType of selectedDefects) {
       const newDefect: Omit<Defect, 'id' | 'detected_at'> = {
         device_id: selectedDevice,
         defect_type: defectType as DefectType,
-        description,
+        description: descriptionWithTechnician,
         severity,
         detected_by: user?.id || ''
       };
@@ -96,10 +112,11 @@ export default function Defects() {
     // Cihaz durumunu güncelle
     await db.updateDevice(selectedDevice, { status: 'inspected' });
 
-    toast.success(`${selectedDefects.length} arıza kaydedildi!`);
+    toast.success(`${selectedDefects.length} arıza kaydedildi! Teknisyen: ${technicians.find(t => t.value === selectedTechnician)?.label}`);
     setSelectedDefects([]);
     setDescription('');
     setSeverity('medium');
+    setSelectedTechnician('');
     await loadData();
     await loadDeviceDefects(selectedDevice);
   };
@@ -108,6 +125,11 @@ export default function Defects() {
     await db.deleteDefect(defectId);
     toast.success('Arıza kaydı silindi');
     await loadDeviceDefects(selectedDevice);
+  };
+
+  const handleServiceRequestCreated = async () => {
+    // Servis talebi oluşturulduğunda cihaz listesini yenile
+    await loadData();
   };
 
   const selectedDeviceData = devices.find(d => d.id === selectedDevice);
@@ -185,6 +207,22 @@ export default function Defects() {
                 </div>
 
                 <div className="space-y-2">
+                  <Label htmlFor="technician">Teknik Servis Personeli</Label>
+                  <Select value={selectedTechnician} onValueChange={setSelectedTechnician}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Teknisyen seçin..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {technicians.map((tech) => (
+                        <SelectItem key={tech.value} value={tech.value}>
+                          {tech.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
                   <Label htmlFor="severity">Öncelik Seviyesi</Label>
                   <Select value={severity} onValueChange={(value: string) => setSeverity(value as SeverityType)}>
                     <SelectTrigger>
@@ -209,7 +247,7 @@ export default function Defects() {
                   />
                 </div>
 
-                <Button type="submit" className="w-full" disabled={!selectedDevice || selectedDefects.length === 0}>
+                <Button type="submit" className="w-full" disabled={!selectedDevice || selectedDefects.length === 0 || !selectedTechnician}>
                   Arızaları Kaydet
                 </Button>
               </form>
@@ -221,7 +259,11 @@ export default function Defects() {
               <div className="flex items-center justify-between">
                 <CardTitle>Tespit Edilen Arızalar</CardTitle>
                 {selectedDeviceData && deviceDefects.length > 0 && (
-                  <DefectPrintReport device={selectedDeviceData} defects={deviceDefects} />
+                  <DefectPrintReport 
+                    device={selectedDeviceData} 
+                    defects={deviceDefects}
+                    onServiceRequestCreated={handleServiceRequestCreated}
+                  />
                 )}
               </div>
             </CardHeader>
