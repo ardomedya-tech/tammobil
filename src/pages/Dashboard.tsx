@@ -1,151 +1,252 @@
-import { DashboardLayout } from '@/components/DashboardLayout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { db } from '@/lib/supabase';
-import { Smartphone, AlertCircle, Send, CheckCircle } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import type { Device, Defect, ServiceRequest } from '@/lib/supabase';
+import { useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabase';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+import { Loader2, TrendingUp, Users, Wrench } from 'lucide-react';
+
+interface TechnicianPerformance {
+  technician_id: string;
+  technician_name: string;
+  assigned_count: number;
+  in_progress_count: number;
+  completed_count: number;
+  total_active: number;
+}
 
 export default function Dashboard() {
-  const [devices, setDevices] = useState<Device[]>([]);
-  const [defects, setDefects] = useState<Defect[]>([]);
-  const [serviceRequests, setServiceRequests] = useState<ServiceRequest[]>([]);
+  const [performanceData, setPerformanceData] = useState<TechnicianPerformance[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        const [devicesData, defectsData, serviceRequestsData] = await Promise.all([
-          db.getDevices(),
-          db.getDefects(),
-          db.getServiceRequests()
-        ]);
-        
-        setDevices(devicesData);
-        setDefects(defectsData);
-        setServiceRequests(serviceRequestsData);
-      } catch (error) {
-        console.error('Error loading dashboard data:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+    fetchPerformanceData();
+    
+    // Subscribe to real-time updates
+    const channel = supabase
+      .channel('service-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'app_0a8fd_services'
+        },
+        () => {
+          fetchPerformanceData();
+        }
+      )
+      .subscribe();
 
-    loadData();
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
-  const stats = [
-    {
-      title: 'Toplam Cihaz',
-      value: devices.length,
-      icon: Smartphone,
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-100'
-    },
-    {
-      title: 'Tespit Edilen Arızalar',
-      value: defects.length,
-      icon: AlertCircle,
-      color: 'text-red-600',
-      bgColor: 'bg-red-100'
-    },
-    {
-      title: 'Servise Gönderilen',
-      value: serviceRequests.filter(r => r.status === 'sent' || r.status === 'in_progress').length,
-      icon: Send,
-      color: 'text-orange-600',
-      bgColor: 'bg-orange-100'
-    },
-    {
-      title: 'Tamamlanan',
-      value: devices.filter(d => d.status === 'completed').length,
-      icon: CheckCircle,
-      color: 'text-green-600',
-      bgColor: 'bg-green-100'
-    }
-  ];
+  const fetchPerformanceData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
 
-  const recentDevices = devices.slice(0, 5);
+      // Fetch all users with Technician role
+      const { data: technicians, error: techError } = await supabase
+        .from('app_0a8fd_users')
+        .select('id, name')
+        .eq('role', 'Technician')
+        .eq('approved', true);
+
+      if (techError) throw techError;
+
+      if (!technicians || technicians.length === 0) {
+        setPerformanceData([]);
+        setLoading(false);
+        return;
+      }
+
+      // Fetch services for all technicians
+      const performancePromises = technicians.map(async (tech) => {
+        const { data: services, error: serviceError } = await supabase
+          .from('app_0a8fd_services')
+          .select('status')
+          .eq('technician_id', tech.id);
+
+        if (serviceError) {
+          console.error(`Error fetching services for ${tech.name}:`, serviceError);
+          return {
+            technician_id: tech.id,
+            technician_name: tech.name,
+            assigned_count: 0,
+            in_progress_count: 0,
+            completed_count: 0,
+            total_active: 0
+          };
+        }
+
+        const assigned = services?.filter(s => s.status === 'Atandı').length || 0;
+        const inProgress = services?.filter(s => s.status === 'Devam Ediyor').length || 0;
+        const completed = services?.filter(s => s.status === 'Tamamlandı').length || 0;
+
+        return {
+          technician_id: tech.id,
+          technician_name: tech.name,
+          assigned_count: assigned,
+          in_progress_count: inProgress,
+          completed_count: completed,
+          total_active: assigned + inProgress
+        };
+      });
+
+      const results = await Promise.all(performancePromises);
+      
+      // Sort by total active tasks (descending)
+      results.sort((a, b) => b.total_active - a.total_active);
+      
+      setPerformanceData(results);
+    } catch (err) {
+      console.error('Error fetching performance data:', err);
+      setError('Performans verileri yüklenirken bir hata oluştu.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getTotalStats = () => {
+    return {
+      totalTechnicians: performanceData.length,
+      totalActive: performanceData.reduce((sum, tech) => sum + tech.total_active, 0),
+      totalCompleted: performanceData.reduce((sum, tech) => sum + tech.completed_count, 0)
+    };
+  };
+
+  const stats = getTotalStats();
 
   if (loading) {
     return (
-      <DashboardLayout>
-        <div className="flex items-center justify-center h-64">
-          <div className="text-gray-500">Yükleniyor...</div>
-        </div>
-      </DashboardLayout>
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
     );
   }
 
   return (
-    <DashboardLayout>
-      <div className="space-y-6">
+    <div className="container mx-auto p-6 space-y-6">
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Ana Sayfa</h1>
-          <p className="text-gray-600 mt-1">Cep telefonu yenileme merkezi yönetim paneli</p>
+          <h1 className="text-3xl font-bold tracking-tight">Anasayfa</h1>
+          <p className="text-muted-foreground">Teknisyen performans takibi ve genel durum</p>
         </div>
+      </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {stats.map((stat, index) => {
-            const Icon = stat.icon;
-            return (
-              <Card key={index}>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-600">{stat.title}</p>
-                      <p className="text-3xl font-bold text-gray-900 mt-2">{stat.value}</p>
-                    </div>
-                    <div className={`${stat.bgColor} p-3 rounded-lg`}>
-                      <Icon className={`w-6 h-6 ${stat.color}`} />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-
+      {/* Statistics Cards */}
+      <div className="grid gap-4 md:grid-cols-3">
         <Card>
-          <CardHeader>
-            <CardTitle>Son Eklenen Cihazlar</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Toplam Teknisyen</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            {recentDevices.length === 0 ? (
-              <p className="text-gray-500 text-center py-8">Henüz cihaz eklenmemiş</p>
-            ) : (
-              <div className="space-y-4">
-                {recentDevices.map((device) => (
-                  <div key={device.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                        <Smartphone className="w-6 h-6 text-blue-600" />
-                      </div>
-                      <div>
-                        <p className="font-medium text-gray-900">{device.brand} {device.model}</p>
-                        <p className="text-sm text-gray-500">IMEI: {device.imei}</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
-                        device.status === 'completed' ? 'bg-green-100 text-green-800' :
-                        device.status === 'in_service' ? 'bg-orange-100 text-orange-800' :
-                        device.status === 'inspected' ? 'bg-blue-100 text-blue-800' :
-                        'bg-gray-100 text-gray-800'
-                      }`}>
-                        {device.status === 'pending_inspection' && 'Kontrol Bekliyor'}
-                        {device.status === 'inspected' && 'Kontrol Edildi'}
-                        {device.status === 'in_service' && 'Serviste'}
-                        {device.status === 'repaired' && 'Tamir Edildi'}
-                        {device.status === 'completed' && 'Tamamlandı'}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+            <div className="text-2xl font-bold">{stats.totalTechnicians}</div>
+            <p className="text-xs text-muted-foreground">Aktif teknisyen sayısı</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Aktif Görevler</CardTitle>
+            <Wrench className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.totalActive}</div>
+            <p className="text-xs text-muted-foreground">Devam eden toplam görev</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Tamamlanan</CardTitle>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.totalCompleted}</div>
+            <p className="text-xs text-muted-foreground">Toplam tamamlanan görev</p>
           </CardContent>
         </Card>
       </div>
-    </DashboardLayout>
+
+      {/* Performance Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Teknisyen Performans Tablosu</CardTitle>
+          <CardDescription>
+            Teknisyenlerin atanan ve tamamlanan görev sayıları (Gerçek zamanlı güncelleme)
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {error && (
+            <div className="bg-destructive/10 text-destructive px-4 py-3 rounded-md mb-4">
+              {error}
+            </div>
+          )}
+
+          {performanceData.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              Henüz onaylanmış teknisyen bulunmamaktadır.
+            </div>
+          ) : (
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[50px]">#</TableHead>
+                    <TableHead>Teknisyen Adı</TableHead>
+                    <TableHead className="text-center">Atandı</TableHead>
+                    <TableHead className="text-center">Devam Ediyor</TableHead>
+                    <TableHead className="text-center">Aktif Toplam</TableHead>
+                    <TableHead className="text-center">Tamamlandı</TableHead>
+                    <TableHead className="text-right">Durum</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {performanceData.map((tech, index) => (
+                    <TableRow key={tech.technician_id}>
+                      <TableCell className="font-medium">{index + 1}</TableCell>
+                      <TableCell className="font-semibold">{tech.technician_name}</TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant="secondary">{tech.assigned_count}</Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant="default">{tech.in_progress_count}</Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge 
+                          variant={tech.total_active > 5 ? "destructive" : "outline"}
+                          className="font-bold"
+                        >
+                          {tech.total_active}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant="success" className="bg-green-500 hover:bg-green-600">
+                          {tech.completed_count}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {tech.total_active === 0 ? (
+                          <span className="text-sm text-muted-foreground">Müsait</span>
+                        ) : tech.total_active > 5 ? (
+                          <span className="text-sm text-destructive font-medium">Yoğun</span>
+                        ) : (
+                          <span className="text-sm text-primary font-medium">Aktif</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
