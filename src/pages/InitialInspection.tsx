@@ -52,13 +52,13 @@ export default function InitialInspection() {
   // Seçili cihaz değiştiğinde formu güncelle
   useEffect(() => {
     if (selectedDeviceId) {
-      const selectedDevice = queue.find(item => item.id === selectedDeviceId);
-      if (selectedDevice) {
+      const currentDevice = queue.find(item => item.id === selectedDeviceId);
+      if (currentDevice) {
         setFormData(prev => ({
           ...prev,
-          brand: selectedDevice.brand,
-          model: selectedDevice.model,
-          imei: selectedDevice.imei
+          brand: currentDevice.brand,
+          model: currentDevice.model,
+          imei: currentDevice.imei
         }));
       }
     }
@@ -67,8 +67,8 @@ export default function InitialInspection() {
   const handleDeviceSelect = (deviceId: string) => {
     setSelectedDeviceId(deviceId);
     // Kontrol verilerini sıfırla ama cihaz bilgilerini koru
-    const selectedDevice = queue.find(item => item.id === deviceId);
-    if (selectedDevice) {
+    const deviceToSelect = queue.find(item => item.id === deviceId);
+    if (deviceToSelect) {
       setFormData({
         screenBroken: '',
         cameraDefect: '',
@@ -76,9 +76,9 @@ export default function InitialInspection() {
         backCoverBroken: '',
         bodyDamage: '',
         batteryLevel: '',
-        brand: selectedDevice.brand,
-        model: selectedDevice.model,
-        imei: selectedDevice.imei
+        brand: deviceToSelect.brand,
+        model: deviceToSelect.model,
+        imei: deviceToSelect.imei
       });
     }
   };
