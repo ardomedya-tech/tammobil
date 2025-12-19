@@ -52,13 +52,13 @@ export default function InitialInspection() {
   // Seçili cihaz değiştiğinde formu güncelle
   useEffect(() => {
     if (selectedDeviceId) {
-      const currentDevice = queue.find(item => item.id === selectedDeviceId);
-      if (currentDevice) {
+      const foundDevice = queue.find(queueItem => queueItem.id === selectedDeviceId);
+      if (foundDevice) {
         setFormData(prev => ({
           ...prev,
-          brand: currentDevice.brand,
-          model: currentDevice.model,
-          imei: currentDevice.imei
+          brand: foundDevice.brand,
+          model: foundDevice.model,
+          imei: foundDevice.imei
         }));
       }
     }
@@ -67,8 +67,8 @@ export default function InitialInspection() {
   const handleDeviceSelect = (deviceId: string) => {
     setSelectedDeviceId(deviceId);
     // Kontrol verilerini sıfırla ama cihaz bilgilerini koru
-    const deviceToSelect = queue.find(item => item.id === deviceId);
-    if (deviceToSelect) {
+    const targetDevice = queue.find(queueItem => queueItem.id === deviceId);
+    if (targetDevice) {
       setFormData({
         screenBroken: '',
         cameraDefect: '',
@@ -76,9 +76,9 @@ export default function InitialInspection() {
         backCoverBroken: '',
         bodyDamage: '',
         batteryLevel: '',
-        brand: deviceToSelect.brand,
-        model: deviceToSelect.model,
-        imei: deviceToSelect.imei
+        brand: targetDevice.brand,
+        model: targetDevice.model,
+        imei: targetDevice.imei
       });
     }
   };
@@ -432,11 +432,11 @@ export default function InitialInspection() {
         
         // Kuyrukta başka cihaz varsa ilkini seç
         if (queue.length > 1) {
-          const remainingDevices = queue.filter(item => item.id !== selectedDeviceId);
-          if (remainingDevices.length > 0) {
+          const nextDevices = queue.filter(queueItem => queueItem.id !== selectedDeviceId);
+          if (nextDevices.length > 0) {
             setTimeout(() => {
-              setSelectedDeviceId(remainingDevices[0].id);
-              toast.success(`Sıradaki cihaz yüklendi: ${remainingDevices[0].brand} ${remainingDevices[0].model}`);
+              setSelectedDeviceId(nextDevices[0].id);
+              toast.success(`Sıradaki cihaz yüklendi: ${nextDevices[0].brand} ${nextDevices[0].model}`);
             }, 1000);
           }
         } else {
@@ -497,28 +497,28 @@ export default function InitialInspection() {
               <CardContent>
                 <ScrollArea className="h-[600px] pr-4">
                   <div className="space-y-2">
-                    {queue.map((device, index) => (
+                    {queue.map((queueDevice, idx) => (
                       <button
-                        key={device.id}
-                        onClick={() => handleDeviceSelect(device.id)}
+                        key={queueDevice.id}
+                        onClick={() => handleDeviceSelect(queueDevice.id)}
                         className={`w-full text-left p-3 rounded-lg border-2 transition-all ${
-                          selectedDeviceId === device.id
+                          selectedDeviceId === queueDevice.id
                             ? 'border-blue-500 bg-blue-50 shadow-md'
                             : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                         }`}
                       >
                         <div className="flex items-start justify-between mb-2">
-                          <Badge variant={selectedDeviceId === device.id ? 'default' : 'secondary'} className="text-xs">
-                            #{index + 1}
+                          <Badge variant={selectedDeviceId === queueDevice.id ? 'default' : 'secondary'} className="text-xs">
+                            #{idx + 1}
                           </Badge>
-                          {selectedDeviceId === device.id && (
+                          {selectedDeviceId === queueDevice.id && (
                             <CheckCircle className="w-4 h-4 text-blue-500" />
                           )}
                         </div>
                         <div className="space-y-1">
-                          <p className="font-semibold text-sm text-gray-900">{device.brand}</p>
-                          <p className="text-sm text-gray-600">{device.model}</p>
-                          <p className="text-xs font-mono text-gray-500 break-all">{device.imei}</p>
+                          <p className="font-semibold text-sm text-gray-900">{queueDevice.brand}</p>
+                          <p className="text-sm text-gray-600">{queueDevice.model}</p>
+                          <p className="text-xs font-mono text-gray-500 break-all">{queueDevice.imei}</p>
                         </div>
                       </button>
                     ))}
