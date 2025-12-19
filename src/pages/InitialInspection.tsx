@@ -8,6 +8,8 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useInspectionQueue } from '@/contexts/InspectionQueueContext';
+import { db, Device } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
 import { Printer, CheckCircle, XCircle, ListOrdered, Smartphone } from 'lucide-react';
 import QRCode from 'qrcode';
 import { toast } from 'sonner';
@@ -25,6 +27,7 @@ interface InspectionData {
 }
 
 export default function InitialInspection() {
+  const { user } = useAuth();
   const { queue, removeFromQueue } = useInspectionQueue();
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
   const [formData, setFormData] = useState<InspectionData>({
@@ -390,7 +393,23 @@ export default function InitialInspection() {
         }, 500);
       };
 
-      toast.success('İlk kontrol raporu yazdırılıyor!');
+      // Cihazı veritabanına ekle (Arıza Tespiti için)
+      try {
+        const newDevice: Omit<Device, 'id' | 'created_at'> = {
+          imei: formData.imei,
+          brand: formData.brand,
+          model: formData.model,
+          entry_date: new Date().toISOString(),
+          status: 'pending_inspection',
+          created_by: user?.id || ''
+        };
+
+        await db.addDevice(newDevice);
+        toast.success('İlk kontrol raporu yazdırılıyor! Cihaz arıza tespitine eklendi.');
+      } catch (error) {
+        console.error('Cihaz eklenirken hata:', error);
+        toast.warning('Rapor yazdırıldı ancak cihaz veritabanına eklenemedi.');
+      }
 
       // Tamamlanan cihazı kuyruktan çıkar
       if (selectedDeviceId) {

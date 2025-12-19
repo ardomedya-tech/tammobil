@@ -3,41 +3,29 @@ import { DashboardLayout } from '@/components/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { db, ServiceRequest, Device, Defect } from '@/lib/supabase';
+import { db, ServiceRequest, Device } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
-import { Send, Package, CheckCircle } from 'lucide-react';
+import { Package, CheckCircle, Clock, Wrench } from 'lucide-react';
 
 export default function Service() {
   const { user } = useAuth();
-  const [inspectedDevices, setInspectedDevices] = useState<Device[]>([]);
-  const [allDevices, setAllDevices] = useState<Device[]>([]);
   const [serviceRequests, setServiceRequests] = useState<ServiceRequest[]>([]);
-  const [allDefects, setAllDefects] = useState<Defect[]>([]);
-  const [selectedDevice, setSelectedDevice] = useState('');
-  const [notes, setNotes] = useState('');
-  const [showCostDialog, setShowCostDialog] = useState(false);
-  const [selectedServiceId, setSelectedServiceId] = useState('');
-  const [serviceCost, setServiceCost] = useState('');
+  const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedRequest, setSelectedRequest] = useState<string>('');
+  const [serviceCost, setServiceCost] = useState<string>('');
 
   const loadData = async () => {
-    const [devicesData, requestsData, defectsData] = await Promise.all([
-      db.getDevices(),
+    const [requests, devicesData] = await Promise.all([
       db.getServiceRequests(),
-      db.getDefects()
+      db.getDevices()
     ]);
-    
-    const filtered = devicesData.filter(d => d.status === 'inspected');
-    setInspectedDevices(filtered);
-    setAllDevices(devicesData);
-    setServiceRequests(requestsData);
-    setAllDefects(defectsData);
+    setServiceRequests(requests);
+    setDevices(devicesData);
     setLoading(false);
   };
 
@@ -45,112 +33,58 @@ export default function Service() {
     loadData();
   }, []);
 
-  const handleSendToService = async () => {
-    if (!selectedDevice) {
-      toast.error('Lütfen bir cihaz seçin');
+  const handleCompleteService = async () => {
+    if (!selectedRequest) {
+      toast.error('Lütfen bir servis talebi seçin');
       return;
     }
 
-    const newRequest: Omit<ServiceRequest, 'id' | 'sent_at'> = {
-      device_id: selectedDevice,
-      status: 'sent',
-      notes,
-      service_cost: 0,
-      sent_by: user?.id || ''
-    };
-
-    await db.addServiceRequest(newRequest);
-    await db.updateDevice(selectedDevice, { status: 'in_service' });
-
-    toast.success('Cihaz teknik servise gönderildi!');
-    setSelectedDevice('');
-    setNotes('');
-    await loadData();
-  };
-
-  const handleCompleteService = (serviceId: string) => {
-    setSelectedServiceId(serviceId);
-    setShowCostDialog(true);
-  };
-
-  const handleSaveCost = async () => {
     if (!serviceCost || parseFloat(serviceCost) < 0) {
-      toast.error('Lütfen geçerli bir ücret girin');
+      toast.error('Lütfen geçerli bir servis maliyeti girin');
       return;
     }
 
-    const service = serviceRequests.find(s => s.id === selectedServiceId);
-    if (!service) return;
+    const request = serviceRequests.find(r => r.id === selectedRequest);
+    if (!request) return;
 
-    const cost = parseFloat(serviceCost);
-
-    // Servis talebini güncelle
-    await db.updateServiceRequest(selectedServiceId, {
+    await db.updateServiceRequest(selectedRequest, {
       status: 'completed',
-      service_cost: cost,
+      service_cost: parseFloat(serviceCost),
       completed_at: new Date().toISOString()
     });
 
-    // Cihaz durumunu güncelle
-    await db.updateDevice(service.device_id, { status: 'repaired' });
+    await db.updateDevice(request.device_id, { status: 'repaired' });
 
-    // Cihazın IMEI'sini al
-    const device = allDevices.find(d => d.id === service.device_id);
+    const device = devices.find(d => d.id === request.device_id);
     if (device) {
-      // IMEI ile stok tablosunda eşleşme var mı kontrol et ve service_cost'u güncelle
-      try {
-        const updatedStock = await db.updateDeviceStockByImei(device.imei, {
-          service_cost: cost
-        });
-        
-        if (updatedStock) {
-          toast.success(`Servis tamamlandı! Ücret: ${cost} ₺ (Stok güncellendi)`);
-        } else {
-          toast.success(`Servis tamamlandı! Ücret: ${cost} ₺`);
-        }
-      } catch (error) {
-        console.error('Stok güncelleme hatası:', error);
-        toast.success(`Servis tamamlandı! Ücret: ${cost} ₺`);
-      }
-    } else {
-      toast.success(`Servis tamamlandı! Ücret: ${cost} ₺`);
+      await db.updateDeviceStockByImei(device.imei, {
+        service_cost: parseFloat(serviceCost)
+      });
     }
 
-    setShowCostDialog(false);
+    toast.success('Servis tamamlandı ve maliyet kaydedildi!');
+    setSelectedRequest('');
     setServiceCost('');
-    setSelectedServiceId('');
     await loadData();
   };
 
-  // Cihaz için teknisyen ve öncelik bilgisini al
   const getDeviceInfo = (deviceId: string) => {
-    const deviceDefects = allDefects.filter(d => d.device_id === deviceId);
-    
-    if (deviceDefects.length === 0) {
-      return { technician: '-', priority: '-' };
-    }
-
-    // En yüksek öncelik seviyesini bul
-    const priorities = deviceDefects.map(d => d.severity);
-    const highestPriority = priorities.includes('high') ? 'high' : 
-                           priorities.includes('medium') ? 'medium' : 'low';
-
-    // Teknisyen bilgisini description'dan çıkar
-    let technician = '-';
-    for (const defect of deviceDefects) {
-      if (defect.description && defect.description.includes('Teknisyen:')) {
-        const match = defect.description.match(/Teknisyen:\s*([^\|]+)/);
-        if (match) {
-          technician = match[1].trim();
-          break;
-        }
-      }
-    }
-
-    return { technician, priority: highestPriority };
+    const device = devices.find(d => d.id === deviceId);
+    return device ? `${device.brand} ${device.model} - ${device.imei}` : 'Bilinmeyen Cihaz';
   };
 
-  const activeRequests = serviceRequests.filter(r => r.status !== 'completed');
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'sent':
+        return <Badge variant="secondary" className="bg-blue-100 text-blue-800"><Clock className="w-3 h-3 mr-1" />Gönderildi</Badge>;
+      case 'in_progress':
+        return <Badge variant="secondary" className="bg-yellow-100 text-yellow-800"><Wrench className="w-3 h-3 mr-1" />İşlemde</Badge>;
+      case 'completed':
+        return <Badge variant="secondary" className="bg-green-100 text-green-800"><CheckCircle className="w-3 h-3 mr-1" />Tamamlandı</Badge>;
+      default:
+        return <Badge variant="secondary">{status}</Badge>;
+    }
+  };
 
   if (loading) {
     return (
@@ -162,204 +96,150 @@ export default function Service() {
     );
   }
 
+  const pendingRequests = serviceRequests.filter(r => r.status !== 'completed');
+  const completedRequests = serviceRequests.filter(r => r.status === 'completed');
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Teknik Servis</h1>
-          <p className="text-gray-600 mt-1">Cihazları teknik servise gönderin ve takip edin</p>
+          <h1 className="text-3xl font-bold text-gray-900">Servis Yönetimi</h1>
+          <p className="text-gray-600 mt-1">Servise gönderilen cihazları takip edin ve tamamlayın</p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card>
             <CardHeader>
-              <CardTitle>Servise Gönder</CardTitle>
+              <CardTitle>Servis Tamamla</CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="device">Cihaz Seçin</Label>
-                  <select
-                    id="device"
-                    value={selectedDevice}
-                    onChange={(e) => setSelectedDevice(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">Cihaz seçin...</option>
-                    {inspectedDevices.map((device) => (
-                      <option key={device.id} value={device.id}>
-                        {device.brand} {device.model} - {device.imei}
-                      </option>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="request">Servis Talebi Seçin</Label>
+                <Select value={selectedRequest} onValueChange={setSelectedRequest}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Bekleyen servis talebi seçin..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {pendingRequests.map((request) => (
+                      <SelectItem key={request.id} value={request.id}>
+                        {getDeviceInfo(request.device_id)} - {getStatusBadge(request.status)}
+                      </SelectItem>
                     ))}
-                  </select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="notes">Servis Notları (Opsiyonel)</Label>
-                  <Textarea
-                    id="notes"
-                    placeholder="Teknik servis için özel notlar..."
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    rows={3}
-                  />
-                </div>
-
-                <Button
-                  onClick={handleSendToService}
-                  className="w-full"
-                  disabled={!selectedDevice}
-                >
-                  <Send className="w-4 h-4 mr-2" />
-                  Servise Gönder
-                </Button>
+                  </SelectContent>
+                </Select>
               </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="serviceCost">Servis Maliyeti (₺)</Label>
+                <Input
+                  id="serviceCost"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="0.00"
+                  value={serviceCost}
+                  onChange={(e) => setServiceCost(e.target.value)}
+                />
+              </div>
+
+              <Button 
+                onClick={handleCompleteService} 
+                className="w-full"
+                disabled={!selectedRequest || !serviceCost}
+              >
+                <CheckCircle className="w-4 h-4 mr-2" />
+                Servisi Tamamla
+              </Button>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader>
-              <CardTitle>Servis İstatistikleri</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <Package className="w-5 h-5" />
+                Bekleyen Servisler
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between p-4 bg-orange-50 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <Package className="w-8 h-8 text-orange-600" />
-                    <div>
-                      <p className="text-sm text-gray-600">Serviste</p>
-                      <p className="text-2xl font-bold text-gray-900">
-                        {serviceRequests.filter(r => r.status === 'sent' || r.status === 'in_progress').length}
-                      </p>
-                    </div>
-                  </div>
+              {pendingRequests.length === 0 ? (
+                <div className="text-center py-12">
+                  <p className="text-gray-500">Bekleyen servis talebi yok</p>
                 </div>
-
-                <div className="flex items-center justify-between p-4 bg-green-50 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <CheckCircle className="w-8 h-8 text-green-600" />
-                    <div>
-                      <p className="text-sm text-gray-600">Tamamlanan</p>
-                      <p className="text-2xl font-bold text-gray-900">
-                        {serviceRequests.filter(r => r.status === 'completed').length}
-                      </p>
+              ) : (
+                <div className="space-y-3">
+                  {pendingRequests.map((request) => (
+                    <div key={request.id} className="p-4 bg-gray-50 rounded-lg">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <p className="font-medium text-gray-900">
+                            {getDeviceInfo(request.device_id)}
+                          </p>
+                          {request.notes && (
+                            <p className="text-sm text-gray-600 mt-1">{request.notes}</p>
+                          )}
+                          <p className="text-xs text-gray-500 mt-2">
+                            Gönderilme: {new Date(request.sent_at).toLocaleString('tr-TR')}
+                          </p>
+                        </div>
+                        {getStatusBadge(request.status)}
+                      </div>
                     </div>
-                  </div>
+                  ))}
                 </div>
-              </div>
+              )}
             </CardContent>
           </Card>
         </div>
 
         <Card>
           <CardHeader>
-            <CardTitle>Aktif Servis Talepleri</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <CheckCircle className="w-5 h-5" />
+              Tamamlanan Servisler
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            {activeRequests.length === 0 ? (
+            {completedRequests.length === 0 ? (
               <div className="text-center py-12">
-                <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-500">Aktif servis talebi yok</p>
+                <p className="text-gray-500">Henüz tamamlanmış servis yok</p>
               </div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Cihaz</TableHead>
-                    <TableHead>IMEI</TableHead>
-                    <TableHead>Teknisyen</TableHead>
-                    <TableHead>Öncelik</TableHead>
-                    <TableHead>Gönderilme Tarihi</TableHead>
-                    <TableHead>Durum</TableHead>
-                    <TableHead>İşlem</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {activeRequests.map((request) => {
-                    const device = allDevices.find(d => d.id === request.device_id);
-                    if (!device) return null;
-
-                    const { technician, priority } = getDeviceInfo(request.device_id);
-
-                    return (
-                      <TableRow key={request.id}>
-                        <TableCell>{device.brand} {device.model}</TableCell>
-                        <TableCell className="font-mono text-sm">{device.imei}</TableCell>
-                        <TableCell>
-                          <span className="font-medium text-blue-600">{technician}</span>
-                        </TableCell>
-                        <TableCell>
-                          <Badge className={
-                            priority === 'high' ? 'bg-red-100 text-red-800' :
-                            priority === 'medium' ? 'bg-orange-100 text-orange-800' :
-                            'bg-yellow-100 text-yellow-800'
-                          }>
-                            {priority === 'high' && 'Yüksek'}
-                            {priority === 'medium' && 'Orta'}
-                            {priority === 'low' && 'Düşük'}
-                            {priority === '-' && '-'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{new Date(request.sent_at).toLocaleDateString('tr-TR')}</TableCell>
-                        <TableCell>
-                          <Badge className={
-                            request.status === 'sent' ? 'bg-blue-100 text-blue-800' :
-                            'bg-orange-100 text-orange-800'
-                          }>
-                            {request.status === 'sent' ? 'Gönderildi' : 'İşlemde'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            size="sm"
-                            onClick={() => handleCompleteService(request.id)}
-                          >
-                            <CheckCircle className="w-4 h-4 mr-2" />
-                            Tamamlandı
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+              <div className="space-y-3">
+                {completedRequests.map((request) => (
+                  <div key={request.id} className="p-4 bg-green-50 rounded-lg border border-green-200">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <p className="font-medium text-gray-900">
+                          {getDeviceInfo(request.device_id)}
+                        </p>
+                        {request.notes && (
+                          <p className="text-sm text-gray-600 mt-1">{request.notes}</p>
+                        )}
+                        <div className="flex items-center gap-4 mt-2">
+                          <p className="text-xs text-gray-500">
+                            Gönderilme: {new Date(request.sent_at).toLocaleString('tr-TR')}
+                          </p>
+                          {request.completed_at && (
+                            <p className="text-xs text-gray-500">
+                              Tamamlanma: {new Date(request.completed_at).toLocaleString('tr-TR')}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end gap-2">
+                        {getStatusBadge(request.status)}
+                        <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+                          {request.service_cost.toFixed(2)} ₺
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </CardContent>
         </Card>
       </div>
-
-      <Dialog open={showCostDialog} onOpenChange={setShowCostDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Teknik Servis Ücreti</DialogTitle>
-            <DialogDescription>
-              Lütfen bu cihaz için yapılan teknik servis ücretini girin. Ücret, IMEI ile eşleşen stok kaydına otomatik olarak eklenecektir.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="cost">Servis Ücreti (₺)</Label>
-              <Input
-                id="cost"
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="0.00"
-                value={serviceCost}
-                onChange={(e) => setServiceCost(e.target.value)}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCostDialog(false)}>
-              İptal
-            </Button>
-            <Button onClick={handleSaveCost}>
-              Kaydet ve Tamamla
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </DashboardLayout>
   );
 }
