@@ -27,8 +27,7 @@ const defectTypes = [
 const technicians = [
   { value: 'nevzat', label: 'Nevzat' },
   { value: 'mustafa', label: 'Mustafa' },
-  { value: 'hasan', label: 'Hasan' },
-  { value: 'can', label: 'Can' }
+  { value: 'hasan', label: 'Hasan' }
 ];
 
 type DefectType = 'screen' | 'battery' | 'camera' | 'software' | 'speaker' | 'microphone' | 'charging_port' | 'refurbishment' | 'other';

@@ -34,6 +34,7 @@ export interface DeviceStock {
   imei: string;
   stock_quantity: number;
   purchase_price: number;
+  service_cost?: number;
   created_by: string;
   created_at: string;
 }
@@ -150,6 +151,17 @@ export const db = {
     return data || [];
   },
 
+  async getDeviceStockByImei(imei: string): Promise<DeviceStock | null> {
+    const { data, error } = await supabase
+      .from('app_74b74e94ab_device_stock')
+      .select('*')
+      .eq('imei', imei)
+      .single();
+    
+    if (error && error.code !== 'PGRST116') throw error;
+    return data;
+  },
+
   async addDeviceStock(stock: Omit<DeviceStock, 'id' | 'created_at'>): Promise<DeviceStock> {
     const { data, error } = await supabase
       .from('app_74b74e94ab_device_stock')
@@ -170,6 +182,18 @@ export const db = {
       .single();
     
     if (error) throw error;
+    return data;
+  },
+
+  async updateDeviceStockByImei(imei: string, updates: Partial<DeviceStock>): Promise<DeviceStock | null> {
+    const { data, error } = await supabase
+      .from('app_74b74e94ab_device_stock')
+      .update(updates)
+      .eq('imei', imei)
+      .select()
+      .single();
+    
+    if (error && error.code !== 'PGRST116') throw error;
     return data;
   },
 

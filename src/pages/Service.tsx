@@ -79,15 +79,40 @@ export default function Service() {
     const service = serviceRequests.find(s => s.id === selectedServiceId);
     if (!service) return;
 
+    const cost = parseFloat(serviceCost);
+
+    // Servis talebini güncelle
     await db.updateServiceRequest(selectedServiceId, {
       status: 'completed',
-      service_cost: parseFloat(serviceCost),
+      service_cost: cost,
       completed_at: new Date().toISOString()
     });
 
+    // Cihaz durumunu güncelle
     await db.updateDevice(service.device_id, { status: 'repaired' });
 
-    toast.success('Servis tamamlandı ve ücret kaydedildi!');
+    // Cihazın IMEI'sini al
+    const device = allDevices.find(d => d.id === service.device_id);
+    if (device) {
+      // IMEI ile eşleşen stok kaydını bul ve teknik servis ücretini ekle
+      try {
+        const stockItem = await db.getDeviceStockByImei(device.imei);
+        if (stockItem) {
+          await db.updateDeviceStockByImei(device.imei, {
+            service_cost: cost
+          });
+          toast.success('Servis tamamlandı, ücret kaydedildi ve stok güncellendi!');
+        } else {
+          toast.success('Servis tamamlandı ve ücret kaydedildi! (Stokta eşleşen IMEI bulunamadı)');
+        }
+      } catch (error) {
+        console.error('Stok güncelleme hatası:', error);
+        toast.success('Servis tamamlandı ve ücret kaydedildi! (Stok güncellenemedi)');
+      }
+    } else {
+      toast.success('Servis tamamlandı ve ücret kaydedildi!');
+    }
+
     setShowCostDialog(false);
     setServiceCost('');
     setSelectedServiceId('');
@@ -258,7 +283,7 @@ export default function Service() {
           <DialogHeader>
             <DialogTitle>Teknik Servis Ücreti</DialogTitle>
             <DialogDescription>
-              Lütfen bu cihaz için yapılan teknik servis ücretini girin.
+              Lütfen bu cihaz için yapılan teknik servis ücretini girin. Ücret otomatik olarak IMEI ile eşleşen stok kaydına eklenecektir.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">

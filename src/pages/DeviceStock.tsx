@@ -46,6 +46,7 @@ export default function DeviceStockPage() {
       imei: formData.imei,
       stock_quantity: formData.stock_quantity,
       purchase_price: formData.purchase_price,
+      service_cost: 0,
       created_by: user?.id || ''
     };
 
@@ -104,6 +105,8 @@ export default function DeviceStockPage() {
   );
 
   const totalStockValue = stock.reduce((sum, item) => sum + (item.purchase_price * item.stock_quantity), 0);
+  const totalServiceCost = stock.reduce((sum, item) => sum + (item.service_cost || 0), 0);
+  const totalValue = totalStockValue + totalServiceCost;
 
   if (loading) {
     return (
@@ -194,7 +197,7 @@ export default function DeviceStockPage() {
           </Dialog>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <h3 className="text-sm font-medium">Toplam Stok</h3>
@@ -208,23 +211,34 @@ export default function DeviceStockPage() {
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <h3 className="text-sm font-medium">Toplam Değer</h3>
+              <h3 className="text-sm font-medium">Alış Fiyatı Toplamı</h3>
               <Package className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">₺{totalStockValue.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</div>
-              <p className="text-xs text-muted-foreground">Alış fiyatı toplamı</p>
+              <p className="text-xs text-muted-foreground">Toplam alış değeri</p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <h3 className="text-sm font-medium">Farklı Model</h3>
+              <h3 className="text-sm font-medium">Servis Ücreti Toplamı</h3>
               <Package className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stock.length}</div>
-              <p className="text-xs text-muted-foreground">Çeşit cihaz</p>
+              <div className="text-2xl font-bold">₺{totalServiceCost.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</div>
+              <p className="text-xs text-muted-foreground">Toplam servis maliyeti</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <h3 className="text-sm font-medium">Toplam Değer</h3>
+              <Package className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">₺{totalValue.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</div>
+              <p className="text-xs text-muted-foreground">Alış + Servis</p>
             </CardContent>
           </Card>
         </div>
@@ -258,6 +272,7 @@ export default function DeviceStockPage() {
                     <TableHead>IMEI</TableHead>
                     <TableHead className="text-center">Stok Adeti</TableHead>
                     <TableHead className="text-right">Alış Fiyatı</TableHead>
+                    <TableHead className="text-right">Teknik Servis Ücreti</TableHead>
                     <TableHead className="text-right">Toplam Değer</TableHead>
                     <TableHead className="text-right">İşlemler</TableHead>
                   </TableRow>
@@ -274,7 +289,18 @@ export default function DeviceStockPage() {
                         </span>
                       </TableCell>
                       <TableCell className="text-right">₺{item.purchase_price.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</TableCell>
-                      <TableCell className="text-right font-medium">₺{(item.purchase_price * item.stock_quantity).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</TableCell>
+                      <TableCell className="text-right">
+                        {item.service_cost ? (
+                          <span className="text-orange-600 font-medium">
+                            ₺{item.service_cost.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right font-medium">
+                        ₺{((item.purchase_price * item.stock_quantity) + (item.service_cost || 0)).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
+                      </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
                           <Button
