@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '@/components/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,11 +10,14 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { db, DeviceStock, Device } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import { useInspectionQueue } from '@/contexts/InspectionQueueContext';
 import { toast } from 'sonner';
-import { Plus, Search, Package, Send, Trash2 } from 'lucide-react';
+import { Plus, Search, Package, Send, Trash2, ClipboardCheck } from 'lucide-react';
 
 export default function DeviceStockPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const { addToQueue } = useInspectionQueue();
   const [stock, setStock] = useState<DeviceStock[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -62,6 +66,20 @@ export default function DeviceStockPage() {
     }
   };
 
+  const handleSendToInitialInspection = (stockItem: DeviceStock) => {
+    // Kuyruğa ekle
+    addToQueue({
+      brand: stockItem.brand,
+      model: stockItem.model,
+      imei: stockItem.imei
+    });
+
+    toast.success(`${stockItem.brand} ${stockItem.model} ilk kontrol kuyruğuna eklendi!`);
+    
+    // İlk Kontrol sayfasına yönlendir
+    navigate('/initial-inspection');
+  };
+
   const handleSendToDefectInspection = async (stockItem: DeviceStock) => {
     try {
       // Stoktan cihazı arıza tespitine gönder (pending_inspection durumunda)
@@ -104,9 +122,9 @@ export default function DeviceStockPage() {
     item.imei.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const totalStockValue = stock.reduce((sum, item) => sum + (item.purchase_price * item.stock_quantity), 0);
+  const totalPurchaseValue = stock.reduce((sum, item) => sum + (item.purchase_price * item.stock_quantity), 0);
   const totalServiceCost = stock.reduce((sum, item) => sum + (item.service_cost || 0), 0);
-  const totalValue = totalStockValue + totalServiceCost;
+  const totalValue = totalPurchaseValue + totalServiceCost;
 
   if (loading) {
     return (
@@ -211,23 +229,23 @@ export default function DeviceStockPage() {
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <h3 className="text-sm font-medium">Alış Fiyatı Toplamı</h3>
+              <h3 className="text-sm font-medium">Alış Değeri</h3>
               <Package className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">₺{totalStockValue.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</div>
-              <p className="text-xs text-muted-foreground">Toplam alış değeri</p>
+              <div className="text-2xl font-bold">₺{totalPurchaseValue.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</div>
+              <p className="text-xs text-muted-foreground">Alış fiyatı toplamı</p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <h3 className="text-sm font-medium">Servis Ücreti Toplamı</h3>
+              <h3 className="text-sm font-medium">Servis Maliyeti</h3>
               <Package className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">₺{totalServiceCost.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</div>
-              <p className="text-xs text-muted-foreground">Toplam servis maliyeti</p>
+              <p className="text-xs text-muted-foreground">Toplam servis ücreti</p>
             </CardContent>
           </Card>
 
@@ -237,7 +255,7 @@ export default function DeviceStockPage() {
               <Package className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">₺{totalValue.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</div>
+              <div className="text-2xl font-bold text-green-600">₺{totalValue.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</div>
               <p className="text-xs text-muted-foreground">Alış + Servis</p>
             </CardContent>
           </Card>
@@ -272,74 +290,88 @@ export default function DeviceStockPage() {
                     <TableHead>IMEI</TableHead>
                     <TableHead className="text-center">Stok Adeti</TableHead>
                     <TableHead className="text-right">Alış Fiyatı</TableHead>
-                    <TableHead className="text-right">Teknik Servis Ücreti</TableHead>
+                    <TableHead className="text-right">Servis Ücreti</TableHead>
                     <TableHead className="text-right">Toplam Değer</TableHead>
                     <TableHead className="text-right">İşlemler</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredStock.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell className="font-medium">{item.brand}</TableCell>
-                      <TableCell>{item.model}</TableCell>
-                      <TableCell className="font-mono text-sm">{item.imei}</TableCell>
-                      <TableCell className="text-center">
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                          {item.stock_quantity} adet
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-right">₺{item.purchase_price.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</TableCell>
-                      <TableCell className="text-right">
-                        {item.service_cost ? (
-                          <span className="text-orange-600 font-medium">
-                            ₺{item.service_cost.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
+                  {filteredStock.map((item) => {
+                    const serviceCost = item.service_cost || 0;
+                    const totalItemValue = (item.purchase_price * item.stock_quantity) + serviceCost;
+                    
+                    return (
+                      <TableRow key={item.id}>
+                        <TableCell className="font-medium">{item.brand}</TableCell>
+                        <TableCell>{item.model}</TableCell>
+                        <TableCell className="font-mono text-sm">{item.imei}</TableCell>
+                        <TableCell className="text-center">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            {item.stock_quantity} adet
                           </span>
-                        ) : (
-                          <span className="text-gray-400">-</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right font-medium">
-                        ₺{((item.purchase_price * item.stock_quantity) + (item.service_cost || 0)).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            variant="default"
-                            size="sm"
-                            onClick={() => handleSendToDefectInspection(item)}
-                          >
-                            <Send className="w-4 h-4 mr-1" />
-                            Arıza Tespitine Gönder
-                          </Button>
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button variant="destructive" size="sm">
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Stoku Sil</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Bu stoğu silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.
-                                  <br /><br />
-                                  <strong>Marka/Model:</strong> {item.brand} {item.model}<br />
-                                  <strong>IMEI:</strong> {item.imei}<br />
-                                  <strong>Stok Adeti:</strong> {item.stock_quantity}
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>İptal</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => handleDelete(item.id, item.brand, item.model)}>
-                                  Sil
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                        </TableCell>
+                        <TableCell className="text-right">₺{item.purchase_price.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</TableCell>
+                        <TableCell className="text-right">
+                          {serviceCost > 0 ? (
+                            <span className="text-orange-600 font-medium">
+                              ₺{serviceCost.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right font-bold text-green-600">
+                          ₺{totalItemValue.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleSendToInitialInspection(item)}
+                              className="bg-purple-50 hover:bg-purple-100 text-purple-700 border-purple-200"
+                            >
+                              <ClipboardCheck className="w-4 h-4 mr-1" />
+                              İlk Kontrole Gönder
+                            </Button>
+                            <Button
+                              variant="default"
+                              size="sm"
+                              onClick={() => handleSendToDefectInspection(item)}
+                            >
+                              <Send className="w-4 h-4 mr-1" />
+                              Arıza Tespitine Gönder
+                            </Button>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="destructive" size="sm">
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Stoku Sil</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Bu stoğu silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.
+                                    <br /><br />
+                                    <strong>Marka/Model:</strong> {item.brand} {item.model}<br />
+                                    <strong>IMEI:</strong> {item.imei}<br />
+                                    <strong>Stok Adeti:</strong> {item.stock_quantity}
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>İptal</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => handleDelete(item.id, item.brand, item.model)}>
+                                    Sil
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             )}

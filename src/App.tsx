@@ -3,6 +3,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from '@/contexts/AuthContext';
+import { InspectionQueueProvider } from '@/contexts/InspectionQueueContext';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
@@ -24,94 +25,96 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <AuthProvider>
-        <BrowserRouter>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/signup" element={<Signup />} />
-            <Route
-              path="/dashboard"
-              element={
-                <ProtectedRoute>
-                  <Dashboard />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/initial-inspection"
-              element={
-                <ProtectedRoute>
-                  <InitialInspection />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/devices"
-              element={
-                <ProtectedRoute>
-                  <Devices />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/device-stock"
-              element={
-                <ProtectedRoute>
-                  <DeviceStock />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/defects"
-              element={
-                <ProtectedRoute>
-                  <Defects />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/service"
-              element={
-                <ProtectedRoute>
-                  <Service />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/service-costs"
-              element={
-                <ProtectedRoute>
-                  <ServiceCosts />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/sales"
-              element={
-                <ProtectedRoute>
-                  <Sales />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/reports"
-              element={
-                <ProtectedRoute>
-                  <Reports />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/users"
-              element={
-                <ProtectedRoute>
-                  <Users />
-                </ProtectedRoute>
-              }
-            />
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            <Route path="*" element={<Navigate to="/dashboard" replace />} />
-          </Routes>
-        </BrowserRouter>
+        <InspectionQueueProvider>
+          <BrowserRouter>
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route path="/signup" element={<Signup />} />
+              <Route
+                path="/dashboard"
+                element={
+                  <ProtectedRoute>
+                    <Dashboard />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/initial-inspection"
+                element={
+                  <ProtectedRoute>
+                    <InitialInspection />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/devices"
+                element={
+                  <ProtectedRoute>
+                    <Devices />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/device-stock"
+                element={
+                  <ProtectedRoute>
+                    <DeviceStock />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/defects"
+                element={
+                  <ProtectedRoute>
+                    <Defects />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/service"
+                element={
+                  <ProtectedRoute>
+                    <Service />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/service-costs"
+                element={
+                  <ProtectedRoute>
+                    <ServiceCosts />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/sales"
+                element={
+                  <ProtectedRoute>
+                    <Sales />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/reports"
+                element={
+                  <ProtectedRoute>
+                    <Reports />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/users"
+                element={
+                  <ProtectedRoute>
+                    <Users />
+                  </ProtectedRoute>
+                }
+              />
+              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            </Routes>
+          </BrowserRouter>
+        </InspectionQueueProvider>
       </AuthProvider>
     </TooltipProvider>
   </QueryClientProvider>

@@ -1,11 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Printer, CheckCircle, XCircle } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { useInspectionQueue } from '@/contexts/InspectionQueueContext';
+import { Printer, CheckCircle, XCircle, ListOrdered, ArrowRight } from 'lucide-react';
 import QRCode from 'qrcode';
 import { toast } from 'sonner';
 
@@ -22,6 +24,7 @@ interface InspectionData {
 }
 
 export default function InitialInspection() {
+  const { queue, removeFromQueue, getNextInQueue } = useInspectionQueue();
   const [formData, setFormData] = useState<InspectionData>({
     screenBroken: '',
     cameraDefect: '',
@@ -33,6 +36,56 @@ export default function InitialInspection() {
     brand: '',
     model: ''
   });
+
+  // Kuyruktan ilk cihazı otomatik olarak yükle
+  useEffect(() => {
+    const nextItem = getNextInQueue();
+    if (nextItem && !formData.imei) {
+      setFormData(prev => ({
+        ...prev,
+        brand: nextItem.brand,
+        model: nextItem.model,
+        imei: nextItem.imei
+      }));
+    }
+  }, [queue]);
+
+  const loadNextDevice = () => {
+    const currentItem = getNextInQueue();
+    if (currentItem) {
+      removeFromQueue(currentItem.id);
+    }
+
+    const nextItem = getNextInQueue();
+    if (nextItem) {
+      setFormData({
+        screenBroken: '',
+        cameraDefect: '',
+        soundDefect: '',
+        backCoverBroken: '',
+        bodyDamage: '',
+        batteryLevel: '',
+        brand: nextItem.brand,
+        model: nextItem.model,
+        imei: nextItem.imei
+      });
+      toast.success(`Sıradaki cihaz yüklendi: ${nextItem.brand} ${nextItem.model}`);
+    } else {
+      // Kuyruk boş, formu temizle
+      setFormData({
+        screenBroken: '',
+        cameraDefect: '',
+        soundDefect: '',
+        backCoverBroken: '',
+        bodyDamage: '',
+        batteryLevel: '',
+        imei: '',
+        brand: '',
+        model: ''
+      });
+      toast.info('Kuyrukta başka cihaz yok');
+    }
+  };
 
   const handlePrint = async () => {
     // Validasyon
@@ -346,18 +399,25 @@ export default function InitialInspection() {
 
       toast.success('İlk kontrol raporu yazdırılıyor!');
 
-      // Formu temizle
-      setFormData({
-        screenBroken: '',
-        cameraDefect: '',
-        soundDefect: '',
-        backCoverBroken: '',
-        bodyDamage: '',
-        batteryLevel: '',
-        imei: '',
-        brand: '',
-        model: ''
-      });
+      // Kuyrukta başka cihaz varsa otomatik yükle
+      if (queue.length > 0) {
+        setTimeout(() => {
+          loadNextDevice();
+        }, 1000);
+      } else {
+        // Kuyruk boşsa formu temizle
+        setFormData({
+          screenBroken: '',
+          cameraDefect: '',
+          soundDefect: '',
+          backCoverBroken: '',
+          bodyDamage: '',
+          batteryLevel: '',
+          imei: '',
+          brand: '',
+          model: ''
+        });
+      }
     } catch (error) {
       console.error('QR kod oluşturma hatası:', error);
       toast.error('QR kod oluşturulurken bir hata oluştu!');
@@ -374,10 +434,49 @@ export default function InitialInspection() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">İlk Kontrol</h1>
-          <p className="text-gray-600 mt-1">Cihazın ilk fiziksel kontrolünü yapın ve rapor yazdırın</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">İlk Kontrol</h1>
+            <p className="text-gray-600 mt-1">Cihazın ilk fiziksel kontrolünü yapın ve rapor yazdırın</p>
+          </div>
+          {queue.length > 0 && (
+            <div className="flex items-center gap-3">
+              <Badge variant="secondary" className="text-lg px-4 py-2">
+                <ListOrdered className="w-5 h-5 mr-2" />
+                Kuyrukta: {queue.length} cihaz
+              </Badge>
+              {queue.length > 1 && (
+                <Button variant="outline" onClick={loadNextDevice}>
+                  <ArrowRight className="w-4 h-4 mr-2" />
+                  Sonraki Cihaz
+                </Button>
+              )}
+            </div>
+          )}
         </div>
+
+        {queue.length > 1 && (
+          <Card className="bg-blue-50 border-blue-200">
+            <CardContent className="pt-6">
+              <div className="flex items-start gap-3">
+                <ListOrdered className="w-5 h-5 text-blue-600 mt-0.5" />
+                <div>
+                  <h3 className="font-semibold text-blue-900 mb-2">Sıradaki Cihazlar:</h3>
+                  <div className="space-y-1">
+                    {queue.slice(1, 4).map((item, index) => (
+                      <p key={item.id} className="text-sm text-blue-700">
+                        {index + 2}. {item.brand} {item.model} - {item.imei}
+                      </p>
+                    ))}
+                    {queue.length > 4 && (
+                      <p className="text-sm text-blue-600 font-medium">+ {queue.length - 4} cihaz daha...</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card>
@@ -572,6 +671,7 @@ export default function InitialInspection() {
             >
               <Printer className="w-5 h-5 mr-2" />
               QR Kod ile Rapor Yazdır
+              {queue.length > 0 && <span className="ml-2 text-sm">({queue.length} kuyrukta)</span>}
             </Button>
           </CardContent>
         </Card>
