@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
+import { DashboardLayout } from '@/components/DashboardLayout';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, TrendingUp, Users, Wrench } from 'lucide-react';
+import { Loader2, TrendingUp, Users, Wrench, User } from 'lucide-react';
 
 interface TechnicianPerformance {
   technician_id: string;
@@ -30,7 +31,7 @@ export default function Dashboard() {
         {
           event: '*',
           schema: 'public',
-          table: 'app_0a8fd_services'
+          table: 'app_74b74e94ab_service_requests'
         },
         () => {
           fetchPerformanceData();
@@ -50,10 +51,10 @@ export default function Dashboard() {
 
       // Fetch all users with Technician role
       const { data: technicians, error: techError } = await supabase
-        .from('app_0a8fd_users')
-        .select('id, name')
-        .eq('role', 'Technician')
-        .eq('approved', true);
+        .from('app_74b74e94ab_users')
+        .select('id, full_name')
+        .eq('role', 'technician')
+        .eq('is_approved', true);
 
       if (techError) throw techError;
 
@@ -66,15 +67,15 @@ export default function Dashboard() {
       // Fetch services for all technicians
       const performancePromises = technicians.map(async (tech) => {
         const { data: services, error: serviceError } = await supabase
-          .from('app_0a8fd_services')
+          .from('app_74b74e94ab_service_requests')
           .select('status')
-          .eq('technician_id', tech.id);
+          .eq('sent_by', tech.id);
 
         if (serviceError) {
-          console.error(`Error fetching services for ${tech.name}:`, serviceError);
+          console.error(`Error fetching services for ${tech.full_name}:`, serviceError);
           return {
             technician_id: tech.id,
-            technician_name: tech.name,
+            technician_name: tech.full_name,
             assigned_count: 0,
             in_progress_count: 0,
             completed_count: 0,
@@ -82,17 +83,17 @@ export default function Dashboard() {
           };
         }
 
-        const assigned = services?.filter(s => s.status === 'Atandı').length || 0;
-        const inProgress = services?.filter(s => s.status === 'Devam Ediyor').length || 0;
-        const completed = services?.filter(s => s.status === 'Tamamlandı').length || 0;
+        const sent = services?.filter(s => s.status === 'sent').length || 0;
+        const inProgress = services?.filter(s => s.status === 'in_progress').length || 0;
+        const completed = services?.filter(s => s.status === 'completed').length || 0;
 
         return {
           technician_id: tech.id,
-          technician_name: tech.name,
-          assigned_count: assigned,
+          technician_name: tech.full_name,
+          assigned_count: sent,
           in_progress_count: inProgress,
           completed_count: completed,
-          total_active: assigned + inProgress
+          total_active: sent + inProgress
         };
       });
 
@@ -122,131 +123,150 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </DashboardLayout>
     );
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Anasayfa</h1>
-          <p className="text-muted-foreground">Teknisyen performans takibi ve genel durum</p>
+    <DashboardLayout>
+      <div className="container mx-auto p-6 space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Anasayfa</h1>
+            <p className="text-muted-foreground">Teknisyen performans takibi ve genel durum</p>
+          </div>
         </div>
-      </div>
 
-      {/* Statistics Cards */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Toplam Teknisyen</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalTechnicians}</div>
-            <p className="text-xs text-muted-foreground">Aktif teknisyen sayısı</p>
-          </CardContent>
-        </Card>
+        {/* Statistics Cards */}
+        <div className="grid gap-4 md:grid-cols-3">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Toplam Teknisyen</CardTitle>
+              <Users className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.totalTechnicians}</div>
+              <p className="text-xs text-muted-foreground">Aktif teknisyen sayısı</p>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Aktif Görevler</CardTitle>
-            <Wrench className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalActive}</div>
-            <p className="text-xs text-muted-foreground">Devam eden toplam görev</p>
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Aktif Görevler</CardTitle>
+              <Wrench className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.totalActive}</div>
+              <p className="text-xs text-muted-foreground">Devam eden toplam görev</p>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Tamamlanan</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalCompleted}</div>
-            <p className="text-xs text-muted-foreground">Toplam tamamlanan görev</p>
-          </CardContent>
-        </Card>
-      </div>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Tamamlanan</CardTitle>
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.totalCompleted}</div>
+              <p className="text-xs text-muted-foreground">Toplam tamamlanan görev</p>
+            </CardContent>
+          </Card>
+        </div>
 
-      {/* Performance Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Teknisyen Performans Tablosu</CardTitle>
-          <CardDescription>
-            Teknisyenlerin atanan ve tamamlanan görev sayıları (Gerçek zamanlı güncelleme)
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+        {/* Individual Technician Performance Tables */}
+        <div className="space-y-6">
+          <h2 className="text-2xl font-bold tracking-tight">Teknisyen Performans Tabloları</h2>
+          
           {error && (
-            <div className="bg-destructive/10 text-destructive px-4 py-3 rounded-md mb-4">
+            <div className="bg-destructive/10 text-destructive px-4 py-3 rounded-md">
               {error}
             </div>
           )}
 
           {performanceData.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              Henüz onaylanmış teknisyen bulunmamaktadır.
-            </div>
+            <Card>
+              <CardContent className="py-12">
+                <div className="text-center text-muted-foreground">
+                  Henüz onaylanmış teknisyen bulunmamaktadır.
+                </div>
+              </CardContent>
+            </Card>
           ) : (
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[50px]">#</TableHead>
-                    <TableHead>Teknisyen Adı</TableHead>
-                    <TableHead className="text-center">Atandı</TableHead>
-                    <TableHead className="text-center">Devam Ediyor</TableHead>
-                    <TableHead className="text-center">Aktif Toplam</TableHead>
-                    <TableHead className="text-center">Tamamlandı</TableHead>
-                    <TableHead className="text-right">Durum</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {performanceData.map((tech, index) => (
-                    <TableRow key={tech.technician_id}>
-                      <TableCell className="font-medium">{index + 1}</TableCell>
-                      <TableCell className="font-semibold">{tech.technician_name}</TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant="secondary">{tech.assigned_count}</Badge>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant="default">{tech.in_progress_count}</Badge>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge 
-                          variant={tech.total_active > 5 ? "destructive" : "outline"}
-                          className="font-bold"
-                        >
-                          {tech.total_active}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant="success" className="bg-green-500 hover:bg-green-600">
-                          {tech.completed_count}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {tech.total_active === 0 ? (
-                          <span className="text-sm text-muted-foreground">Müsait</span>
-                        ) : tech.total_active > 5 ? (
-                          <span className="text-sm text-destructive font-medium">Yoğun</span>
-                        ) : (
-                          <span className="text-sm text-primary font-medium">Aktif</span>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {performanceData.map((tech) => (
+                <Card key={tech.technician_id} className="overflow-hidden">
+                  <CardHeader className="bg-primary/5 border-b">
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <User className="h-5 w-5" />
+                      {tech.technician_name}
+                    </CardTitle>
+                    <CardDescription>
+                      {tech.total_active === 0 ? (
+                        <span className="text-green-600 font-medium">Müsait</span>
+                      ) : tech.total_active > 5 ? (
+                        <span className="text-destructive font-medium">Yoğun ({tech.total_active} aktif görev)</span>
+                      ) : (
+                        <span className="text-primary font-medium">Aktif ({tech.total_active} görev)</span>
+                      )}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-[60%]">Durum</TableHead>
+                          <TableHead className="text-right">Sayı</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        <TableRow>
+                          <TableCell className="font-medium">Gönderildi</TableCell>
+                          <TableCell className="text-right">
+                            <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+                              {tech.assigned_count}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell className="font-medium">Devam Ediyor</TableCell>
+                          <TableCell className="text-right">
+                            <Badge variant="default" className="bg-yellow-100 text-yellow-800">
+                              {tech.in_progress_count}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell className="font-medium">Aktif Toplam</TableCell>
+                          <TableCell className="text-right">
+                            <Badge 
+                              variant={tech.total_active > 5 ? "destructive" : "outline"}
+                              className="font-bold"
+                            >
+                              {tech.total_active}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell className="font-medium">Tamamlandı</TableCell>
+                          <TableCell className="text-right">
+                            <Badge variant="secondary" className="bg-green-100 text-green-800">
+                              {tech.completed_count}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
           )}
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+      </div>
+    </DashboardLayout>
   );
 }
