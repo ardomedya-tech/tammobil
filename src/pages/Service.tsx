@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { db, ServiceRequest, Device } from '@/lib/supabase';
+import { db, ServiceRequest, Device, Defect } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { Send, Package, CheckCircle } from 'lucide-react';
@@ -18,6 +18,7 @@ export default function Service() {
   const [inspectedDevices, setInspectedDevices] = useState<Device[]>([]);
   const [allDevices, setAllDevices] = useState<Device[]>([]);
   const [serviceRequests, setServiceRequests] = useState<ServiceRequest[]>([]);
+  const [allDefects, setAllDefects] = useState<Defect[]>([]);
   const [selectedDevice, setSelectedDevice] = useState('');
   const [notes, setNotes] = useState('');
   const [showCostDialog, setShowCostDialog] = useState(false);
@@ -26,15 +27,17 @@ export default function Service() {
   const [loading, setLoading] = useState(true);
 
   const loadData = async () => {
-    const [devicesData, requestsData] = await Promise.all([
+    const [devicesData, requestsData, defectsData] = await Promise.all([
       db.getDevices(),
-      db.getServiceRequests()
+      db.getServiceRequests(),
+      db.getDefects()
     ]);
     
     const filtered = devicesData.filter(d => d.status === 'inspected');
     setInspectedDevices(filtered);
     setAllDevices(devicesData);
     setServiceRequests(requestsData);
+    setAllDefects(defectsData);
     setLoading(false);
   };
 
@@ -94,29 +97,57 @@ export default function Service() {
     // Cihazın IMEI'sini al
     const device = allDevices.find(d => d.id === service.device_id);
     if (device) {
-      // IMEI ile eşleşen stok kaydını bul ve teknik servis ücretini ekle
+      // IMEI ile stok tablosunda eşleşme var mı kontrol et ve service_cost'u güncelle
       try {
-        const stockItem = await db.getDeviceStockByImei(device.imei);
-        if (stockItem) {
-          await db.updateDeviceStockByImei(device.imei, {
-            service_cost: cost
-          });
-          toast.success('Servis tamamlandı, ücret kaydedildi ve stok güncellendi!');
+        const updatedStock = await db.updateDeviceStockByImei(device.imei, {
+          service_cost: cost
+        });
+        
+        if (updatedStock) {
+          toast.success(`Servis tamamlandı! Ücret: ${cost} ₺ (Stok güncellendi)`);
         } else {
-          toast.success('Servis tamamlandı ve ücret kaydedildi! (Stokta eşleşen IMEI bulunamadı)');
+          toast.success(`Servis tamamlandı! Ücret: ${cost} ₺`);
         }
       } catch (error) {
         console.error('Stok güncelleme hatası:', error);
-        toast.success('Servis tamamlandı ve ücret kaydedildi! (Stok güncellenemedi)');
+        toast.success(`Servis tamamlandı! Ücret: ${cost} ₺`);
       }
     } else {
-      toast.success('Servis tamamlandı ve ücret kaydedildi!');
+      toast.success(`Servis tamamlandı! Ücret: ${cost} ₺`);
     }
 
     setShowCostDialog(false);
     setServiceCost('');
     setSelectedServiceId('');
     await loadData();
+  };
+
+  // Cihaz için teknisyen ve öncelik bilgisini al
+  const getDeviceInfo = (deviceId: string) => {
+    const deviceDefects = allDefects.filter(d => d.device_id === deviceId);
+    
+    if (deviceDefects.length === 0) {
+      return { technician: '-', priority: '-' };
+    }
+
+    // En yüksek öncelik seviyesini bul
+    const priorities = deviceDefects.map(d => d.severity);
+    const highestPriority = priorities.includes('high') ? 'high' : 
+                           priorities.includes('medium') ? 'medium' : 'low';
+
+    // Teknisyen bilgisini description'dan çıkar
+    let technician = '-';
+    for (const defect of deviceDefects) {
+      if (defect.description && defect.description.includes('Teknisyen:')) {
+        const match = defect.description.match(/Teknisyen:\s*([^\|]+)/);
+        if (match) {
+          technician = match[1].trim();
+          break;
+        }
+      }
+    }
+
+    return { technician, priority: highestPriority };
   };
 
   const activeRequests = serviceRequests.filter(r => r.status !== 'completed');
@@ -236,6 +267,8 @@ export default function Service() {
                   <TableRow>
                     <TableHead>Cihaz</TableHead>
                     <TableHead>IMEI</TableHead>
+                    <TableHead>Teknisyen</TableHead>
+                    <TableHead>Öncelik</TableHead>
                     <TableHead>Gönderilme Tarihi</TableHead>
                     <TableHead>Durum</TableHead>
                     <TableHead>İşlem</TableHead>
@@ -246,10 +279,27 @@ export default function Service() {
                     const device = allDevices.find(d => d.id === request.device_id);
                     if (!device) return null;
 
+                    const { technician, priority } = getDeviceInfo(request.device_id);
+
                     return (
                       <TableRow key={request.id}>
                         <TableCell>{device.brand} {device.model}</TableCell>
                         <TableCell className="font-mono text-sm">{device.imei}</TableCell>
+                        <TableCell>
+                          <span className="font-medium text-blue-600">{technician}</span>
+                        </TableCell>
+                        <TableCell>
+                          <Badge className={
+                            priority === 'high' ? 'bg-red-100 text-red-800' :
+                            priority === 'medium' ? 'bg-orange-100 text-orange-800' :
+                            'bg-yellow-100 text-yellow-800'
+                          }>
+                            {priority === 'high' && 'Yüksek'}
+                            {priority === 'medium' && 'Orta'}
+                            {priority === 'low' && 'Düşük'}
+                            {priority === '-' && '-'}
+                          </Badge>
+                        </TableCell>
                         <TableCell>{new Date(request.sent_at).toLocaleDateString('tr-TR')}</TableCell>
                         <TableCell>
                           <Badge className={
@@ -283,7 +333,7 @@ export default function Service() {
           <DialogHeader>
             <DialogTitle>Teknik Servis Ücreti</DialogTitle>
             <DialogDescription>
-              Lütfen bu cihaz için yapılan teknik servis ücretini girin. Ücret otomatik olarak IMEI ile eşleşen stok kaydına eklenecektir.
+              Lütfen bu cihaz için yapılan teknik servis ücretini girin. Ücret, IMEI ile eşleşen stok kaydına otomatik olarak eklenecektir.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
