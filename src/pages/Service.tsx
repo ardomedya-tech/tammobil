@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { db, ServiceRequest, Device } from '@/lib/supabase';
@@ -16,6 +17,7 @@ export default function Service() {
   const [serviceRequests, setServiceRequests] = useState<ServiceRequest[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedRequest, setSelectedRequest] = useState<string>('');
   const [serviceCost, setServiceCost] = useState<string>('');
   const [showCompletionDialog, setShowCompletionDialog] = useState(false);
   const [pendingCompletionRequest, setPendingCompletionRequest] = useState<ServiceRequest | null>(null);
@@ -67,6 +69,7 @@ export default function Service() {
     setShowCompletionDialog(false);
     setPendingCompletionRequest(null);
     setServiceCost('');
+    setSelectedRequest('');
     await loadData();
   };
 
@@ -112,39 +115,68 @@ export default function Service() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card>
             <CardHeader>
-              <CardTitle>Bekleyen Servisler</CardTitle>
+              <CardTitle>Servis Tamamla</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {pendingRequests.length === 0 ? (
-                <div className="text-center py-8 bg-gray-50 rounded-lg">
-                  <p className="text-sm text-gray-500">Bekleyen servis talebi yok</p>
-                </div>
-              ) : (
-                <div className="space-y-2 max-h-96 overflow-y-auto">
-                  {pendingRequests.map((request) => (
-                    <div 
-                      key={request.id} 
-                      className="p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors border border-gray-200"
-                      onClick={() => handleRequestClick(request)}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <p className="font-medium text-sm text-gray-900">
-                            {getDeviceInfo(request.device_id)}
-                          </p>
-                          {request.notes && (
-                            <p className="text-xs text-gray-600 mt-1">{request.notes}</p>
-                          )}
-                          <p className="text-xs text-gray-500 mt-1">
-                            Gönderilme: {new Date(request.sent_at).toLocaleString('tr-TR')}
-                          </p>
-                        </div>
-                        {getStatusBadge(request.status)}
-                      </div>
-                    </div>
-                  ))}
+              <div className="space-y-2">
+                <Label htmlFor="request">Servis Talebi Seçin</Label>
+                <Select value={selectedRequest} onValueChange={setSelectedRequest}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Bekleyen servis talebi seçin..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {pendingRequests.map((request) => (
+                      <SelectItem key={request.id} value={request.id}>
+                        {getDeviceInfo(request.device_id)} - {request.status === 'sent' ? 'Gönderildi' : 'İşlemde'}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {selectedRequest && (
+                <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                  <p className="text-sm font-medium text-blue-900">Seçili Servis Talebi</p>
+                  <p className="text-sm text-blue-700 mt-1">
+                    {getDeviceInfo(pendingRequests.find(r => r.id === selectedRequest)?.device_id || '')}
+                  </p>
                 </div>
               )}
+
+              {/* Bekleyen Servisler Listesi */}
+              <div className="space-y-2">
+                <Label>Bekleyen Servisler</Label>
+                {pendingRequests.length === 0 ? (
+                  <div className="text-center py-8 bg-gray-50 rounded-lg">
+                    <p className="text-sm text-gray-500">Bekleyen servis talebi yok</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-96 overflow-y-auto">
+                    {pendingRequests.map((request) => (
+                      <div 
+                        key={request.id} 
+                        className="p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors border border-gray-200"
+                        onClick={() => handleRequestClick(request)}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <p className="font-medium text-sm text-gray-900">
+                              {getDeviceInfo(request.device_id)}
+                            </p>
+                            {request.notes && (
+                              <p className="text-xs text-gray-600 mt-1">{request.notes}</p>
+                            )}
+                            <p className="text-xs text-gray-500 mt-1">
+                              Gönderilme: {new Date(request.sent_at).toLocaleString('tr-TR')}
+                            </p>
+                          </div>
+                          {getStatusBadge(request.status)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </CardContent>
           </Card>
 
