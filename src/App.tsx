@@ -8,6 +8,7 @@ import Login from './pages/Login';
 import Signup from './pages/Signup';
 import Dashboard from './pages/Dashboard';
 import Devices from './pages/Devices';
+import DeviceStock from './pages/DeviceStock';
 import Defects from './pages/Defects';
 import Service from './pages/Service';
 import ServiceCosts from './pages/ServiceCosts';
@@ -39,6 +40,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <Devices />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/device-stock"
+              element={
+                <ProtectedRoute>
+                  <DeviceStock />
                 </ProtectedRoute>
               }
             />

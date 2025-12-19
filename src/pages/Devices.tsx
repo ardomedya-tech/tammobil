@@ -5,12 +5,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { db, Device } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
-import { Plus, Search, Smartphone } from 'lucide-react';
+import { Plus, Search, Smartphone, Trash2 } from 'lucide-react';
 
 export default function Devices() {
   const { user } = useAuth();
@@ -54,6 +55,17 @@ export default function Devices() {
     toast.success('Cihaz başarıyla eklendi!');
     setIsDialogOpen(false);
     setFormData({ imei: '', brand: '', model: '', entry_date: new Date().toISOString().split('T')[0] });
+  };
+
+  const handleDelete = async (id: string, imei: string) => {
+    try {
+      await db.deleteDevice(id);
+      await loadDevices();
+      toast.success(`Cihaz (${imei}) başarıyla silindi!`);
+    } catch (error) {
+      toast.error('Cihaz silinirken bir hata oluştu!');
+      console.error('Delete error:', error);
+    }
   };
 
   const filteredDevices = devices.filter(device => {
@@ -185,6 +197,7 @@ export default function Devices() {
                     <TableHead>Model</TableHead>
                     <TableHead>Giriş Tarihi</TableHead>
                     <TableHead>Durum</TableHead>
+                    <TableHead className="text-right">İşlemler</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -208,6 +221,32 @@ export default function Devices() {
                           {device.status === 'repaired' && 'Tamir Edildi'}
                           {device.status === 'completed' && 'Tamamlandı'}
                         </span>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="destructive" size="sm">
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Cihazı Sil</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Bu cihazı silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.
+                                <br /><br />
+                                <strong>IMEI:</strong> {device.imei}<br />
+                                <strong>Marka/Model:</strong> {device.brand} {device.model}
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>İptal</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => handleDelete(device.id, device.imei)}>
+                                Sil
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       </TableCell>
                     </TableRow>
                   ))}

@@ -10,6 +10,7 @@ import {
   BarChart3,
   ShoppingCart,
   DollarSign,
+  Package,
   LogOut
 } from 'lucide-react';
 
@@ -30,6 +31,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const menuItems = [
     { path: '/dashboard', icon: LayoutDashboard, label: 'Ana Sayfa' },
     { path: '/devices', icon: Smartphone, label: 'Cihazlar' },
+    { path: '/device-stock', icon: Package, label: 'Cihaz Stok' },
     { path: '/defects', icon: AlertCircle, label: 'Arıza Tespiti' },
     { path: '/service', icon: Send, label: 'Teknik Servis' },
     { path: '/service-costs', icon: DollarSign, label: 'Servis Ücretleri' },
