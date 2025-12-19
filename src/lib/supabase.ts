@@ -39,6 +39,21 @@ export interface DeviceStock {
   created_at: string;
 }
 
+// Initial Inspection types and interfaces
+export interface InitialInspection {
+  id: string;
+  device_id: string;
+  imei: string;
+  screen_broken: boolean;
+  camera_defect: boolean;
+  sound_defect: boolean;
+  back_cover_broken: boolean;
+  body_damage: boolean;
+  battery_level: number;
+  inspected_by: string;
+  inspected_at: string;
+}
+
 // Defect types and interfaces
 export interface Defect {
   id: string;
@@ -206,6 +221,41 @@ export const db = {
     if (error) throw error;
   },
 
+  // Initial Inspections
+  async getInitialInspections(): Promise<InitialInspection[]> {
+    const { data, error } = await supabase
+      .from('app_74b74e94ab_initial_inspections')
+      .select('*')
+      .order('inspected_at', { ascending: false });
+    
+    if (error) throw error;
+    return data || [];
+  },
+
+  async getInitialInspectionByDeviceId(deviceId: string): Promise<InitialInspection | null> {
+    const { data, error } = await supabase
+      .from('app_74b74e94ab_initial_inspections')
+      .select('*')
+      .eq('device_id', deviceId)
+      .order('inspected_at', { ascending: false })
+      .limit(1)
+      .single();
+    
+    if (error && error.code !== 'PGRST116') throw error;
+    return data;
+  },
+
+  async addInitialInspection(inspection: Omit<InitialInspection, 'id' | 'inspected_at'>): Promise<InitialInspection> {
+    const { data, error } = await supabase
+      .from('app_74b74e94ab_initial_inspections')
+      .insert([inspection])
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
+  },
+
   // Defects
   async getDefects(): Promise<Defect[]> {
     const { data, error } = await supabase
@@ -284,7 +334,7 @@ export const db = {
   },
 
   async updateServiceRequest(id: string, updates: Partial<ServiceRequest>): Promise<ServiceRequest> {
-    const { data, error } = await supabase
+    const { data, error} = await supabase
       .from('app_74b74e94ab_service_requests')
       .update(updates)
       .eq('id', id)
