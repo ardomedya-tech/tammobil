@@ -1,9 +1,10 @@
--- Users table
+-- Users table with approval status
 CREATE TABLE IF NOT EXISTS app_74b74e94ab_users (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     email TEXT UNIQUE NOT NULL,
     full_name TEXT NOT NULL,
     role TEXT NOT NULL CHECK (role IN ('operator', 'technician', 'admin')),
+    is_approved BOOLEAN DEFAULT false NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
@@ -32,7 +33,7 @@ CREATE TABLE IF NOT EXISTS app_74b74e94ab_device_stock (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
--- Initial Inspections table (NEW)
+-- Initial Inspections table
 CREATE TABLE IF NOT EXISTS app_74b74e94ab_initial_inspections (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     device_id UUID REFERENCES app_74b74e94ab_devices(id) ON DELETE CASCADE,
@@ -81,6 +82,8 @@ ALTER TABLE app_74b74e94ab_service_requests ENABLE ROW LEVEL SECURITY;
 -- RLS Policies
 CREATE POLICY "allow_read_all_users" ON app_74b74e94ab_users FOR SELECT USING (true);
 CREATE POLICY "allow_insert_users" ON app_74b74e94ab_users FOR INSERT WITH CHECK (true);
+CREATE POLICY "allow_update_users" ON app_74b74e94ab_users FOR UPDATE USING (true);
+CREATE POLICY "allow_delete_users" ON app_74b74e94ab_users FOR DELETE USING (true);
 
 CREATE POLICY "allow_read_all_devices" ON app_74b74e94ab_devices FOR SELECT USING (true);
 CREATE POLICY "allow_insert_devices" ON app_74b74e94ab_devices FOR INSERT WITH CHECK (true);
@@ -114,3 +117,10 @@ CREATE INDEX IF NOT EXISTS idx_initial_inspections_device_id ON app_74b74e94ab_i
 CREATE INDEX IF NOT EXISTS idx_initial_inspections_imei ON app_74b74e94ab_initial_inspections(imei);
 CREATE INDEX IF NOT EXISTS idx_defects_device_id ON app_74b74e94ab_defects(device_id);
 CREATE INDEX IF NOT EXISTS idx_service_requests_device_id ON app_74b74e94ab_service_requests(device_id);
+CREATE INDEX IF NOT EXISTS idx_users_email ON app_74b74e94ab_users(email);
+CREATE INDEX IF NOT EXISTS idx_users_is_approved ON app_74b74e94ab_users(is_approved);
+
+-- Insert admin user (Bugra Kocak) with approval
+INSERT INTO app_74b74e94ab_users (email, full_name, role, is_approved)
+VALUES ('bugra.kocak@tammobil.com', 'Bugra Kocak', 'admin', true)
+ON CONFLICT (email) DO UPDATE SET role = 'admin', is_approved = true;

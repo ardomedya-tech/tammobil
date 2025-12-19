@@ -11,6 +11,7 @@ export interface User {
   email: string;
   full_name: string;
   role: 'operator' | 'technician' | 'admin';
+  is_approved: boolean;
   created_at: string;
 }
 
@@ -99,6 +100,27 @@ export const db = {
     
     if (error) throw error;
     return data;
+  },
+
+  async updateUser(id: string, updates: Partial<User>): Promise<User> {
+    const { data, error } = await supabase
+      .from('app_74b74e94ab_users')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
+  },
+
+  async deleteUser(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('app_74b74e94ab_users')
+      .delete()
+      .eq('id', id);
+    
+    if (error) throw error;
   },
 
   async getUserByEmail(email: string): Promise<User | null> {

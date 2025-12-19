@@ -1,30 +1,35 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { toast } from 'sonner';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AlertCircle } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function Login() {
-  const [email, setEmail] = useState('demo@example.com');
-  const [password, setPassword] = useState('demo123');
-  const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
   const navigate = useNavigate();
+  const { login } = useAuth();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
     setLoading(true);
 
     try {
       await login(email, password);
-      toast.success('Giriş başarılı!');
-      navigate('/dashboard');
-    } catch (error) {
-      toast.error('Giriş başarısız. Lütfen bilgilerinizi kontrol edin.');
-      console.error('Login error:', error);
+      navigate('/');
+    } catch (err) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('Giriş yapılırken bir hata oluştu');
+      }
     } finally {
       setLoading(false);
     }
@@ -33,21 +38,26 @@ export default function Login() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
       <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <div className="flex justify-center mb-4">
-            <img src="/assets/logo-phone-repair_variant_2.png" alt="Logo" className="w-16 h-16" />
-          </div>
-          <CardTitle className="text-2xl">Hoş Geldiniz</CardTitle>
-          <CardDescription>Tammobil Yenileme Merkezi</CardDescription>
+        <CardHeader className="space-y-1">
+          <CardTitle className="text-2xl font-bold text-center">Giriş Yap</CardTitle>
+          <CardDescription className="text-center">
+            Tammobil yönetim sistemine hoş geldiniz
+          </CardDescription>
         </CardHeader>
         <CardContent>
+          {error && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
                 id="email"
                 type="email"
-                placeholder="ornek@email.com"
+                placeholder="ornek@tammobil.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -68,18 +78,15 @@ export default function Login() {
               {loading ? 'Giriş yapılıyor...' : 'Giriş Yap'}
             </Button>
           </form>
-          <div className="mt-4 text-center text-sm">
-            <span className="text-gray-600">Hesabınız yok mu? </span>
-            <Link to="/signup" className="text-blue-600 hover:underline font-medium">
+        </CardContent>
+        <CardFooter className="flex justify-center">
+          <p className="text-sm text-muted-foreground">
+            Hesabınız yok mu?{' '}
+            <Link to="/signup" className="text-primary hover:underline font-medium">
               Kayıt Ol
             </Link>
-          </div>
-          <div className="mt-4 p-3 bg-blue-50 rounded-lg text-sm text-blue-800">
-            <p className="font-medium mb-1">Demo Giriş:</p>
-            <p>Email: demo@example.com</p>
-            <p>Şifre: herhangi bir şifre (demo123)</p>
-          </div>
-        </CardContent>
+          </p>
+        </CardFooter>
       </Card>
     </div>
   );

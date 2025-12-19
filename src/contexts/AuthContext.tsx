@@ -22,7 +22,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const parsedUser = JSON.parse(storedUser);
         // Verify user still exists in database
         const dbUser = await db.getUserByEmail(parsedUser.email);
-        if (dbUser) {
+        if (dbUser && dbUser.is_approved) {
           setUser(dbUser);
         } else {
           localStorage.removeItem('currentUser');
@@ -35,12 +35,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const login = async (email: string, password: string) => {
     const foundUser = await db.getUserByEmail(email);
-    if (foundUser) {
-      setUser(foundUser);
-      localStorage.setItem('currentUser', JSON.stringify(foundUser));
-    } else {
+    if (!foundUser) {
       throw new Error('Kullanıcı bulunamadı');
     }
+    if (!foundUser.is_approved) {
+      throw new Error('Hesabınız henüz onaylanmamış. Lütfen yönetici onayını bekleyin.');
+    }
+    setUser(foundUser);
+    localStorage.setItem('currentUser', JSON.stringify(foundUser));
   };
 
   const signup = async (email: string, password: string, fullName: string, role: 'operator' | 'technician' | 'admin') => {
@@ -52,16 +54,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const newUser: Omit<User, 'id' | 'created_at'> = {
       email,
       full_name: fullName,
-      role
+      role,
+      is_approved: false // New users need approval
     };
 
-    const createdUser = await db.addUser(newUser);
-    if (createdUser) {
-      setUser(createdUser);
-      localStorage.setItem('currentUser', JSON.stringify(createdUser));
-    } else {
-      throw new Error('Kullanıcı oluşturulamadı');
-    }
+    await db.addUser(newUser);
+    throw new Error('Kayıt başarılı! Hesabınız yönetici tarafından onaylandıktan sonra giriş yapabilirsiniz.');
   };
 
   const logout = () => {
