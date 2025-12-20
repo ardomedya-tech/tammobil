@@ -4,7 +4,8 @@ import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, TrendingUp, Users, Wrench, User } from 'lucide-react';
+import { Loader2, TrendingUp, Users, Wrench, RefreshCw } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface TechnicianPerformance {
   technician_id: string;
@@ -139,6 +140,10 @@ export default function Dashboard() {
             <h1 className="text-3xl font-bold tracking-tight">Anasayfa</h1>
             <p className="text-muted-foreground">Teknisyen performans takibi ve genel durum</p>
           </div>
+          <Button onClick={fetchPerformanceData} variant="outline" size="sm">
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Yenile
+          </Button>
         </div>
 
         {/* Statistics Cards */}
@@ -178,7 +183,7 @@ export default function Dashboard() {
         </div>
 
         {/* Individual Technician Performance Tables */}
-        <div className="space-y-6">
+        <div className="space-y-4">
           <h2 className="text-2xl font-bold tracking-tight">Teknisyen Performans Tabloları</h2>
           
           {error && (
@@ -196,66 +201,64 @@ export default function Dashboard() {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            <div className="space-y-4">
               {performanceData.map((tech) => (
-                <Card key={tech.technician_id} className="overflow-hidden">
-                  <CardHeader className="bg-primary/5 border-b">
-                    <CardTitle className="flex items-center gap-2 text-lg">
-                      <User className="h-5 w-5" />
-                      {tech.technician_name}
-                    </CardTitle>
-                    <CardDescription>
-                      {tech.total_active === 0 ? (
-                        <span className="text-green-600 font-medium">Müsait</span>
-                      ) : tech.total_active > 5 ? (
-                        <span className="text-destructive font-medium">Yoğun ({tech.total_active} aktif görev)</span>
-                      ) : (
-                        <span className="text-primary font-medium">Aktif ({tech.total_active} görev)</span>
-                      )}
-                    </CardDescription>
+                <Card key={tech.technician_id}>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-lg font-semibold">
+                        {tech.technician_name}
+                      </CardTitle>
+                      <Badge 
+                        variant={tech.total_active === 0 ? "secondary" : tech.total_active > 5 ? "destructive" : "default"}
+                        className="text-xs"
+                      >
+                        {tech.total_active === 0 ? "Müsait" : tech.total_active > 5 ? "Yoğun" : "Aktif"}
+                      </Badge>
+                    </div>
                   </CardHeader>
-                  <CardContent className="p-0">
+                  <CardContent className="pt-0">
                     <Table>
                       <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-[60%]">Durum</TableHead>
-                          <TableHead className="text-right">Sayı</TableHead>
+                        <TableRow className="hover:bg-transparent">
+                          <TableHead className="h-8 text-xs">Gönderildi</TableHead>
+                          <TableHead className="h-8 text-xs">Devam Ediyor</TableHead>
+                          <TableHead className="h-8 text-xs">Aktif Toplam</TableHead>
+                          <TableHead className="h-8 text-xs">Tamamlandı</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        <TableRow>
-                          <TableCell className="font-medium">Gönderildi</TableCell>
-                          <TableCell className="text-right">
-                            <Badge variant="secondary" className="bg-blue-100 text-blue-800">
-                              {tech.assigned_count}
-                            </Badge>
+                        <TableRow className="hover:bg-transparent">
+                          <TableCell className="py-2">
+                            <div className="flex items-center justify-center">
+                              <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                                {tech.assigned_count}
+                              </Badge>
+                            </div>
                           </TableCell>
-                        </TableRow>
-                        <TableRow>
-                          <TableCell className="font-medium">Devam Ediyor</TableCell>
-                          <TableCell className="text-right">
-                            <Badge variant="default" className="bg-yellow-100 text-yellow-800">
-                              {tech.in_progress_count}
-                            </Badge>
+                          <TableCell className="py-2">
+                            <div className="flex items-center justify-center">
+                              <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
+                                {tech.in_progress_count}
+                              </Badge>
+                            </div>
                           </TableCell>
-                        </TableRow>
-                        <TableRow>
-                          <TableCell className="font-medium">Aktif Toplam</TableCell>
-                          <TableCell className="text-right">
-                            <Badge 
-                              variant={tech.total_active > 5 ? "destructive" : "outline"}
-                              className="font-bold"
-                            >
-                              {tech.total_active}
-                            </Badge>
+                          <TableCell className="py-2">
+                            <div className="flex items-center justify-center">
+                              <Badge 
+                                variant={tech.total_active > 5 ? "destructive" : "outline"}
+                                className={tech.total_active > 5 ? "" : "bg-orange-50 text-orange-700 border-orange-200 font-bold"}
+                              >
+                                {tech.total_active}
+                              </Badge>
+                            </div>
                           </TableCell>
-                        </TableRow>
-                        <TableRow>
-                          <TableCell className="font-medium">Tamamlandı</TableCell>
-                          <TableCell className="text-right">
-                            <Badge variant="secondary" className="bg-green-100 text-green-800">
-                              {tech.completed_count}
-                            </Badge>
+                          <TableCell className="py-2">
+                            <div className="flex items-center justify-center">
+                              <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                                {tech.completed_count}
+                              </Badge>
+                            </div>
                           </TableCell>
                         </TableRow>
                       </TableBody>
