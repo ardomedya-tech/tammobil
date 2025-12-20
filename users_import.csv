@@ -1,0 +1,6 @@
+email,full_name,role,is_approved
+admin@example.com,Admin User,admin,true
+nevzat@example.com,Nevzat,technician,true
+mustafa@example.com,Mustafa,technician,true
+hasan@example.com,Hasan,technician,true
+operator@example.com,Operator User,operator,true
