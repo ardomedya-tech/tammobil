@@ -2,6 +2,7 @@ import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { InspectionQueueProvider } from '@/contexts/InspectionQueueContext';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
@@ -114,6 +115,7 @@ const App = () => (
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>
           </BrowserRouter>
+          <SpeedInsights />
         </InspectionQueueProvider>
       </AuthProvider>
     </TooltipProvider>
