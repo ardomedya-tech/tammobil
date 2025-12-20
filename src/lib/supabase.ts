@@ -104,14 +104,22 @@ export const db = {
   },
 
   async updateUser(id: string, updates: Partial<User>): Promise<User> {
-    const { data, error } = await supabase
+    // First, do the update without expecting a return
+    const { error: updateError } = await supabase
       .from('app_74b74e94ab_users')
       .update(updates)
+      .eq('id', id);
+    
+    if (updateError) throw updateError;
+    
+    // Then fetch the updated user
+    const { data, error: fetchError } = await supabase
+      .from('app_74b74e94ab_users')
+      .select('*')
       .eq('id', id)
-      .select()
       .single();
     
-    if (error) throw error;
+    if (fetchError) throw fetchError;
     return data;
   },
 
