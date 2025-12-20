@@ -27,34 +27,41 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Initialize Supabase client with service role key
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
     // Get the authorization header
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       console.error(`[${requestId}] No authorization header`);
       return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
+        JSON.stringify({ error: 'Not authenticated' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Verify the user is authenticated and is an admin
     const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    
+    // Initialize Supabase client with ANON key for auth verification
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    
+    // Create client with anon key for auth verification
+    const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey);
+    
+    // Verify the user is authenticated
+    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser(token);
 
     if (authError || !user) {
       console.error(`[${requestId}] Auth error:`, authError);
       return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
+        JSON.stringify({ error: 'Not authenticated' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     console.log(`[${requestId}] User authenticated:`, user.id);
+
+    // Create client with service role key for database operations
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Check if user is admin
     const { data: userData, error: userError } = await supabase
