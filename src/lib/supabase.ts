@@ -64,6 +64,7 @@ export interface Defect {
   severity: 'low' | 'medium' | 'high';
   detected_by: string;
   detected_at: string;
+  technician?: string; // Added technician field
 }
 
 // Service Request types and interfaces

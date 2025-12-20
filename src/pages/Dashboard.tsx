@@ -4,17 +4,23 @@ import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, TrendingUp, Users, Wrench, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Loader2, TrendingUp, Users, Wrench, User, RefreshCw } from 'lucide-react';
 
 interface TechnicianPerformance {
-  technician_id: string;
   technician_name: string;
   assigned_count: number;
   in_progress_count: number;
   completed_count: number;
   total_active: number;
 }
+
+// Hardcoded technician list matching Defects page
+const TECHNICIANS = [
+  { value: 'nevzat', label: 'Nevzat' },
+  { value: 'mustafa', label: 'Mustafa' },
+  { value: 'hasan', label: 'Hasan' }
+];
 
 export default function Dashboard() {
   const [performanceData, setPerformanceData] = useState<TechnicianPerformance[]>([]);
@@ -24,8 +30,23 @@ export default function Dashboard() {
   useEffect(() => {
     fetchPerformanceData();
     
-    // Subscribe to real-time updates
-    const channel = supabase
+    // Subscribe to real-time updates for both defects and service requests
+    const defectsChannel = supabase
+      .channel('defects-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'app_74b74e94ab_defects'
+        },
+        () => {
+          fetchPerformanceData();
+        }
+      )
+      .subscribe();
+
+    const serviceChannel = supabase
       .channel('service-changes')
       .on(
         'postgres_changes',
@@ -41,7 +62,8 @@ export default function Dashboard() {
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(defectsChannel);
+      supabase.removeChannel(serviceChannel);
     };
   }, []);
 
@@ -50,60 +72,59 @@ export default function Dashboard() {
       setLoading(true);
       setError(null);
 
-      // Fetch all users with Technician role
-      const { data: technicians, error: techError } = await supabase
-        .from('app_74b74e94ab_users')
-        .select('id, full_name')
-        .eq('role', 'technician')
-        .eq('is_approved', true);
+      // Fetch all defects
+      const { data: defects, error: defectsError } = await supabase
+        .from('app_74b74e94ab_defects')
+        .select('*');
 
-      if (techError) throw techError;
+      if (defectsError) throw defectsError;
 
-      if (!technicians || technicians.length === 0) {
-        setPerformanceData([]);
-        setLoading(false);
-        return;
-      }
+      // Fetch all service requests
+      const { data: serviceRequests, error: serviceError } = await supabase
+        .from('app_74b74e94ab_service_requests')
+        .select('*');
 
-      // Fetch services for all technicians
-      const performancePromises = technicians.map(async (tech) => {
-        const { data: services, error: serviceError } = await supabase
-          .from('app_74b74e94ab_service_requests')
-          .select('status')
-          .eq('sent_by', tech.id);
+      if (serviceError) throw serviceError;
 
-        if (serviceError) {
-          console.error(`Error fetching services for ${tech.full_name}:`, serviceError);
-          return {
-            technician_id: tech.id,
-            technician_name: tech.full_name,
-            assigned_count: 0,
-            in_progress_count: 0,
-            completed_count: 0,
-            total_active: 0
-          };
-        }
+      // Extract technician name from defect description
+      const extractTechnicianName = (description: string): string | null => {
+        const match = description.match(/Teknisyen:\s*(\w+)/i);
+        return match ? match[1] : null;
+      };
 
-        const sent = services?.filter(s => s.status === 'sent').length || 0;
-        const inProgress = services?.filter(s => s.status === 'in_progress').length || 0;
-        const completed = services?.filter(s => s.status === 'completed').length || 0;
+      // Process data for each technician
+      const techPerformance = TECHNICIANS.map(tech => {
+        // Count defects assigned to this technician
+        const techDefects = defects?.filter(d => {
+          const techName = extractTechnicianName(d.description || '');
+          return techName?.toLowerCase() === tech.label.toLowerCase();
+        }) || [];
+
+        // Get device IDs for this technician's defects
+        const deviceIds = techDefects.map(d => d.device_id);
+
+        // Count service requests for these devices
+        const techServices = serviceRequests?.filter(sr => 
+          deviceIds.includes(sr.device_id)
+        ) || [];
+
+        const sent = techServices.filter(s => s.status === 'sent').length;
+        const inProgress = techServices.filter(s => s.status === 'in_progress').length;
+        const completed = techServices.filter(s => s.status === 'completed').length;
 
         return {
-          technician_id: tech.id,
-          technician_name: tech.full_name,
-          assigned_count: sent,
+          technician_name: tech.label,
+          assigned_count: techDefects.length,
           in_progress_count: inProgress,
           completed_count: completed,
-          total_active: sent + inProgress
+          total_active: techDefects.length + inProgress
         };
       });
 
-      const results = await Promise.all(performancePromises);
-      
       // Sort by total active tasks (descending)
-      results.sort((a, b) => b.total_active - a.total_active);
+      techPerformance.sort((a, b) => b.total_active - a.total_active);
       
-      setPerformanceData(results);
+      setPerformanceData(techPerformance);
     } catch (err) {
       console.error('Error fetching performance data:', err);
       setError('Performans verileri yüklenirken bir hata oluştu.');
@@ -196,69 +217,107 @@ export default function Dashboard() {
             <Card>
               <CardContent className="py-12">
                 <div className="text-center text-muted-foreground">
-                  Henüz onaylanmış teknisyen bulunmamaktadır.
+                  Henüz teknisyen performans verisi bulunmamaktadır.
                 </div>
               </CardContent>
             </Card>
           ) : (
             <div className="space-y-4">
               {performanceData.map((tech) => (
-                <Card key={tech.technician_id}>
-                  <CardHeader className="pb-3">
+                <Card key={tech.technician_name} className="overflow-hidden">
+                  <CardHeader className="bg-gradient-to-r from-primary/10 to-primary/5 border-b pb-3">
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-lg font-semibold">
+                      <CardTitle className="flex items-center gap-2 text-lg">
+                        <User className="h-5 w-5 text-primary" />
                         {tech.technician_name}
                       </CardTitle>
                       <Badge 
                         variant={tech.total_active === 0 ? "secondary" : tech.total_active > 5 ? "destructive" : "default"}
-                        className="text-xs"
+                        className="text-sm px-3 py-1"
                       >
                         {tech.total_active === 0 ? "Müsait" : tech.total_active > 5 ? "Yoğun" : "Aktif"}
                       </Badge>
                     </div>
                   </CardHeader>
-                  <CardContent className="pt-0">
+                  <CardContent className="p-0">
                     <Table>
                       <TableHeader>
-                        <TableRow className="hover:bg-transparent">
-                          <TableHead className="h-8 text-xs">Gönderildi</TableHead>
-                          <TableHead className="h-8 text-xs">Devam Ediyor</TableHead>
-                          <TableHead className="h-8 text-xs">Aktif Toplam</TableHead>
-                          <TableHead className="h-8 text-xs">Tamamlandı</TableHead>
+                        <TableRow className="bg-muted/50">
+                          <TableHead className="font-semibold">Durum</TableHead>
+                          <TableHead className="text-center font-semibold">Sayı</TableHead>
+                          <TableHead className="text-right font-semibold">Oran</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        <TableRow className="hover:bg-transparent">
-                          <TableCell className="py-2">
-                            <div className="flex items-center justify-center">
-                              <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                                {tech.assigned_count}
-                              </Badge>
+                        <TableRow className="hover:bg-muted/50">
+                          <TableCell className="font-medium">
+                            <div className="flex items-center gap-2">
+                              <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                              Atanan Arızalar
                             </div>
                           </TableCell>
-                          <TableCell className="py-2">
-                            <div className="flex items-center justify-center">
-                              <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
-                                {tech.in_progress_count}
-                              </Badge>
+                          <TableCell className="text-center">
+                            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                              {tech.assigned_count}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right text-sm text-muted-foreground">
+                            {tech.total_active > 0 
+                              ? `${Math.round((tech.assigned_count / tech.total_active) * 100)}%`
+                              : '-'}
+                          </TableCell>
+                        </TableRow>
+                        <TableRow className="hover:bg-muted/50">
+                          <TableCell className="font-medium">
+                            <div className="flex items-center gap-2">
+                              <div className="w-2 h-2 rounded-full bg-yellow-500"></div>
+                              Devam Eden
                             </div>
                           </TableCell>
-                          <TableCell className="py-2">
-                            <div className="flex items-center justify-center">
-                              <Badge 
-                                variant={tech.total_active > 5 ? "destructive" : "outline"}
-                                className={tech.total_active > 5 ? "" : "bg-orange-50 text-orange-700 border-orange-200 font-bold"}
-                              >
-                                {tech.total_active}
-                              </Badge>
+                          <TableCell className="text-center">
+                            <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
+                              {tech.in_progress_count}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right text-sm text-muted-foreground">
+                            {tech.total_active > 0 
+                              ? `${Math.round((tech.in_progress_count / tech.total_active) * 100)}%`
+                              : '-'}
+                          </TableCell>
+                        </TableRow>
+                        <TableRow className="hover:bg-muted/50 bg-primary/5">
+                          <TableCell className="font-bold">
+                            <div className="flex items-center gap-2">
+                              <div className="w-2 h-2 rounded-full bg-primary"></div>
+                              Toplam Aktif
                             </div>
                           </TableCell>
-                          <TableCell className="py-2">
-                            <div className="flex items-center justify-center">
-                              <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                                {tech.completed_count}
-                              </Badge>
+                          <TableCell className="text-center">
+                            <Badge 
+                              variant={tech.total_active > 5 ? "destructive" : "default"}
+                              className="font-bold"
+                            >
+                              {tech.total_active}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right text-sm font-medium">
+                            100%
+                          </TableCell>
+                        </TableRow>
+                        <TableRow className="hover:bg-muted/50">
+                          <TableCell className="font-medium">
+                            <div className="flex items-center gap-2">
+                              <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                              Tamamlanan
                             </div>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                              {tech.completed_count}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right text-sm text-muted-foreground">
+                            Tamamlandı
                           </TableCell>
                         </TableRow>
                       </TableBody>
