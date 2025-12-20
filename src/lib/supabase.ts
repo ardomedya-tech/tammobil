@@ -79,6 +79,34 @@ export interface ServiceRequest {
   completed_at?: string;
 }
 
+// Helper function to call edge functions
+async function callEdgeFunction(functionName: string, body: Record<string, unknown>) {
+  const { data: { session } } = await supabase.auth.getSession();
+  
+  if (!session) {
+    throw new Error('Not authenticated');
+  }
+
+  const response = await fetch(
+    `${supabaseUrl}/functions/v1/${functionName}`,
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    }
+  );
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Edge function call failed');
+  }
+
+  return response.json();
+}
+
 // Database operations
 export const db = {
   // Users
@@ -104,32 +132,37 @@ export const db = {
   },
 
   async updateUser(id: string, updates: Partial<User>): Promise<User> {
-    // First, do the update without expecting a return
-    const { error: updateError } = await supabase
-      .from('app_74b74e94ab_users')
-      .update(updates)
-      .eq('id', id);
+    console.log('[supabase.ts] Calling edge function to update user:', id, updates);
     
-    if (updateError) throw updateError;
-    
-    // Then fetch the updated user
-    const { data, error: fetchError } = await supabase
-      .from('app_74b74e94ab_users')
-      .select('*')
-      .eq('id', id)
-      .single();
-    
-    if (fetchError) throw fetchError;
-    return data;
+    try {
+      const result = await callEdgeFunction('app_74b74e94ab_manage_user', {
+        action: 'update',
+        userId: id,
+        updates
+      });
+      
+      console.log('[supabase.ts] Edge function result:', result);
+      return result.data;
+    } catch (error) {
+      console.error('[supabase.ts] Edge function error:', error);
+      throw error;
+    }
   },
 
   async deleteUser(id: string): Promise<void> {
-    const { error } = await supabase
-      .from('app_74b74e94ab_users')
-      .delete()
-      .eq('id', id);
+    console.log('[supabase.ts] Calling edge function to delete user:', id);
     
-    if (error) throw error;
+    try {
+      await callEdgeFunction('app_74b74e94ab_manage_user', {
+        action: 'delete',
+        userId: id
+      });
+      
+      console.log('[supabase.ts] User deleted successfully via edge function');
+    } catch (error) {
+      console.error('[supabase.ts] Edge function error:', error);
+      throw error;
+    }
   },
 
   async getUserByEmail(email: string): Promise<User | null> {
